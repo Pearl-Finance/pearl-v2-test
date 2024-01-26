@@ -2,20 +2,14 @@
 pragma solidity ^0.8.20;
 
 import {Handler} from "./Handler.sol";
-import {Test, console2 as console} from "forge-std/Test.sol";
-
-import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {RewardsDistributor} from "../src/v1.5/RewardsDistributor.sol";
-
 import {Pearl} from "pearl-token/src/token/Pearl.sol";
-
-import {VotingEscrow} from "pearl-token/src/governance/VotingEscrow.sol";
-
-import {VotingEscrowVesting} from "pearl-token/src/governance/VotingEscrowVesting.sol";
-
-import {VotingMath} from "pearl-token/src/governance/VotingMath.sol";
-
+import {Test, console2 as console} from "forge-std/Test.sol";
 import {MockVoter} from "pearl-token/test/mocks/MockVoter.sol";
+import {VotingMath} from "pearl-token/src/governance/VotingMath.sol";
+import {RewardsDistributor} from "../src/v1.5/RewardsDistributor.sol";
+import {VotingEscrow} from "pearl-token/src/governance/VotingEscrow.sol";
+import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {VotingEscrowVesting} from "pearl-token/src/governance/VotingEscrowVesting.sol";
 
 contract RewardsDistributorInvariants is Test {
     RewardsDistributor public rewardsDistributor;
@@ -92,50 +86,7 @@ contract RewardsDistributorInvariants is Test {
         targetContract(address(handler));
     }
 
-    // The USTB contract's token balance should always be
-    // at least as much as the sum of individual mints.
-    function invariant_mint() public {
-        console.log(handler.ghost_zeroBurn(), "k");
-        console.log(handler.hour(), "o");
-        console.log(handler.ghost_actualBurn(), "l");
-        // assertEq(
-        //     handler.ghost_mintedSum() - handler.ghost_burntSum(),
-        //     ustb.totalSupply()
-        // );
-    }
+    function invariant_mints() public {}
 
-    // // All to and fro bridging should be balanced out.
-    // function invariant_bridgedToken() public {
-    //     assertEq(
-    //         handler.ghost_bridgedTokensTo() - handler.ghost_bridgedTokensFrom(),
-    //         0
-    //     );
-    // }
-
-    // // The USTB contract's token balance should always be
-    // // at least as much as the sum of individual balances
-    // function invariant_totalBalance() public {
-    //     uint256 sumOfBalances = handler.reduceActors(0, this.accumulateBalance);
-    //     assertEq(sumOfBalances, ustb.totalSupply());
-    // }
-
-    // // No individual account balance can exceed the USTB totalSupply().
-    // function invariant_userBalances() public {
-    //     handler.forEachActor(this.assertAccountBalanceLteTotalSupply);
-    // }
-
-    // function assertAccountBalanceLteTotalSupply(address account) external {
-    //     assertLe(ustb.balanceOf(account), ustb.totalSupply());
-    // }
-
-    // function accumulateBalance(
-    //     uint256 balance,
-    //     address caller
-    // ) external view returns (uint256) {
-    //     return balance + ustb.balanceOf(caller);
-    // }
-
-    // function invariant_callSummary() public view {
-    //     handler.callSummary();
-    // }
+    function invariant_claims() public {}
 }

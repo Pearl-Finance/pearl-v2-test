@@ -208,7 +208,7 @@ contract RewardsDistributorTest is Test {
         assertEq(ownerBalanceAfterTx, 8000 ether);
     }
 
-    function test_should_claim_reward_by_anyone_who_calls_claim_when_an_NFT_is_Fully_Vested()
+    function test_should_let_user_claim_reward_when_an_NFT_is_Fully_Vested()
         public
     {
         uint256 nftID = __mint();
