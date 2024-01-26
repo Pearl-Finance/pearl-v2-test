@@ -1,0 +1,12 @@
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/openzeppelin-contracts-08"]
+	path = lib/openzeppelin-contracts-08
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "lib/openzeppelin-08"]
+	path = lib/openzeppelin-08
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/pearl-token"]
+	path = lib/pearl-token
+	url = https://github.com/Pearl-Finance/pearl-token
