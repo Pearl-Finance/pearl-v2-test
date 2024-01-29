@@ -1,60 +1,197 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
+import {Voter} from "../src/Voter.sol";
 import {Pearl} from "pearl-token/src/token/Pearl.sol";
 import {BribeFactory} from "../src/v1.5/BribeFactory.sol";
 import {Test, console2 as console} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {VotingEscrow} from "pearl-token/src/governance/VotingEscrow.sol";
 import {SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {VotingEscrowVesting} from "pearl-token/src/governance/VotingEscrowVesting.sol";
 
 /**
- * @title Uint Test For Rewards Distributor Contract
+ * @title Uint Test For Bribe Factory Contract
  * @author c-n-o-t-e
- * @dev Contract is used to test out Rewards Distributor Contract-
- *      by forking the UNREAL chain to interact with voting escrow contract.
+ * @dev
  *
- * Functionalities Tested:
- * - Failed scenario initializing the contract.
- * - Failed scenario setting the owner address.
- * - Failed scenario setting amount for reward.
- * - Failed scenario setting the depositor address.
- * - Failed scenario when withdrawing ERC20 from contract.
- * - Failed scenario when caller of the claim() has no reward to claim.
- * - Successfully set the owner address.
- * - Successfully initialize the contract.
- * - Successfully set the depositor address.
- * - Successfully claim rewards from claim().
- * - Successfully check claimable amounts for token IDs.
- * - Successfully withdraw ERC20 tokens from the contract.
- * - Successfully increase locked user tokens when vesting duration is above zero.
- * - Successfully claiming rewards for a given token ID based on its voting power.
+ *
  */
 
 contract BribeFactoryTest is Test {
+    error BribeFactory_Token_Already_Added();
+    error BribeFactory_Zero_Address_Not_Allowed();
+    error BribeFactory_Tokens_Cannot_Be_The_Same();
+    error BribeFactory_Not_A_Default_Reward_Token();
+
+    Voter public voter;
     Pearl public pearl;
     BribeFactory public bribeFactory;
+    VotingEscrowVesting vesting;
 
     function setUp() public {
-        bribeFactory = new BribeFactory();
-        Pearl pearlImpl = new Pearl(block.chainid, address(0));
+        address votingEscrowProxyAddress = vm.computeCreateAddress(
+            address(this),
+            vm.getNonce(address(this)) + 6
+        );
 
-        bytes memory init = abi.encodeCall(pearlImpl.initialize, (address(8)));
-        ERC1967Proxy pearlProxy = new ERC1967Proxy(address(pearlImpl), init);
+        address factoryProxyAddress = vm.computeCreateAddress(
+            address(this),
+            vm.getNonce(address(this)) + 8
+        );
 
+        pearl = new Pearl(block.chainid, address(0));
+        bytes memory init = abi.encodeCall(pearl.initialize, (address(7)));
+
+        ERC1967Proxy pearlProxy = new ERC1967Proxy(address(pearl), init);
         pearl = Pearl(address(pearlProxy));
-        address[] memory addr = new address[](1);
 
+        VotingEscrow votingEscrowImpl = new VotingEscrow(address(pearlProxy));
+        voter = new Voter();
+
+        init = abi.encodeCall(
+            voter.initialize,
+            (
+                address(votingEscrowImpl),
+                address(1),
+                address(2),
+                factoryProxyAddress
+            )
+        );
+        ERC1967Proxy voterProxy = new ERC1967Proxy(address(voter), init);
+        voter = Voter(address(voterProxy));
+
+        vesting = new VotingEscrowVesting(votingEscrowProxyAddress);
+
+        init = abi.encodeCall(
+            votingEscrowImpl.initialize,
+            (address(vesting), address(5), address(0))
+        );
+
+        ERC1967Proxy votingEscrowProxy = new ERC1967Proxy(
+            address(votingEscrowImpl),
+            init
+        );
+
+        address[] memory addr = new address[](1);
         addr[0] = address(pearl);
-        init = abi.encodeCall(BribeFactory.initialize, (address(9), addr));
+
+        voter.setVotingEscrow(address(votingEscrowProxy));
+        voter._initialize(addr, address(8));
+
+        bribeFactory = new BribeFactory();
+
+        init = abi.encodeCall(BribeFactory.initialize, (address(voter), addr));
 
         ERC1967Proxy mainProxy = new ERC1967Proxy(address(bribeFactory), init);
         bribeFactory = BribeFactory(address(mainProxy));
     }
 
     function test_AssertInitialization() public {
-        assertEq(bribeFactory.voter(), address(9));
+        assertEq(bribeFactory.voter(), address(voter));
+        assertEq(bribeFactory.hasRole(0x00, address(this)), true);
+
         assertEq(bribeFactory.defaultRewardToken(0), address(pearl));
         assertEq(bribeFactory.isDefaultRewardToken(address(pearl)), true);
+
+        assertEq(
+            bribeFactory.hasRole(keccak256("BRIBE_ADMIN"), address(this)),
+            true
+        );
+    }
+
+    //////////////////////////////////  ONLY OWNER INTERACTIONS //////////////////////////////////
+
+    function test_BribeDeployment() public {
+        address bribe = bribeFactory.createBribe(
+            address(1),
+            address(3),
+            address(6),
+            "_type"
+        );
+        assertEq(bribeFactory.last_bribe(), bribe);
+    }
+
+    function test_SetVoter() public {
+        address newVoter = makeAddr("newVoter");
+        bribeFactory.setVoter(newVoter);
+        assertEq(bribeFactory.voter(), newVoter);
+    }
+
+    function test_AddDefaultRewardToken() public {
+        address newToken = makeAddr("newToken");
+        bribeFactory.pushDefaultRewardToken(newToken);
+
+        assertEq(bribeFactory.defaultRewardToken(1), newToken);
+        assertEq(bribeFactory.isDefaultRewardToken(newToken), true);
+    }
+
+    function test_RemoveDefaultRewardToken() public {
+        address newToken = makeAddr("newToken");
+        bribeFactory.pushDefaultRewardToken(newToken);
+
+        assertEq(bribeFactory.defaultRewardToken(0), address(pearl));
+        bribeFactory.removeDefaultRewardToken(address(pearl));
+
+        assertEq(bribeFactory.defaultRewardToken(0), newToken);
+        assertEq(bribeFactory.isDefaultRewardToken(address(pearl)), false);
+    }
+
+    function test_ShouldFailIfAddressIsZero() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BribeFactory_Zero_Address_Not_Allowed.selector
+            )
+        );
+
+        bribeFactory.pushDefaultRewardToken(address(0));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BribeFactory_Zero_Address_Not_Allowed.selector
+            )
+        );
+
+        bribeFactory.createBribe(address(1), address(0), address(6), "_type");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BribeFactory_Zero_Address_Not_Allowed.selector
+            )
+        );
+
+        bribeFactory.createBribe(address(1), address(3), address(0), "_type");
+    }
+
+    function test_ShouldFailIfTokenAlreadyExist() public {
+        address newToken = makeAddr("newToken");
+        bribeFactory.pushDefaultRewardToken(newToken);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(BribeFactory_Token_Already_Added.selector)
+        );
+
+        bribeFactory.pushDefaultRewardToken(newToken);
+    }
+
+    function test_ShouldFailIfTokenIsNotRewardToken() public {
+        address newToken = makeAddr("newToken");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BribeFactory_Not_A_Default_Reward_Token.selector
+            )
+        );
+        bribeFactory.removeDefaultRewardToken(newToken);
+    }
+
+    function test_ShouldFailIfTokenIsTheSame() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BribeFactory_Tokens_Cannot_Be_The_Same.selector
+            )
+        );
+
+        bribeFactory.createBribe(address(1), address(3), address(3), "_type");
     }
 }
