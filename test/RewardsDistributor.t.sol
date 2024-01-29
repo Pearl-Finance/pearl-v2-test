@@ -6,7 +6,6 @@ import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {RewardsDistributor} from "../src/v1.5/RewardsDistributor.sol";
 import {SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {UUPSUpgradeable} from "openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title Uint Test For Rewards Distributor Contract
