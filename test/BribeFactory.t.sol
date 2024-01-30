@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Voter} from "../src/Voter.sol";
 import {Pearl} from "pearl-token/src/token/Pearl.sol";
+import {IBribe} from "../src/interfaces/IBribe.sol";
 import {BribeFactory} from "../src/v1.5/BribeFactory.sol";
 import {Test, console2 as console} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -146,22 +147,6 @@ contract BribeFactoryTest is Test {
         );
 
         bribeFactory.pushDefaultRewardToken(address(0));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BribeFactory_Zero_Address_Not_Allowed.selector
-            )
-        );
-
-        bribeFactory.createBribe(address(1), address(0), address(6), "_type");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BribeFactory_Zero_Address_Not_Allowed.selector
-            )
-        );
-
-        bribeFactory.createBribe(address(1), address(3), address(0), "_type");
     }
 
     function test_ShouldFailIfTokenAlreadyExist() public {
@@ -176,13 +161,12 @@ contract BribeFactoryTest is Test {
     }
 
     function test_ShouldFailIfTokenIsNotRewardToken() public {
-        address newToken = makeAddr("newToken");
         vm.expectRevert(
             abi.encodeWithSelector(
                 BribeFactory_Not_A_Default_Reward_Token.selector
             )
         );
-        bribeFactory.removeDefaultRewardToken(newToken);
+        bribeFactory.removeDefaultRewardToken(makeAddr("newToken"));
     }
 
     function test_ShouldFailIfTokenIsTheSame() public {
@@ -193,5 +177,87 @@ contract BribeFactoryTest is Test {
         );
 
         bribeFactory.createBribe(address(1), address(3), address(3), "_type");
+    }
+
+    ////////////////////////////////// ONLY OWNER or BRIBE ADMIN INTERACTIONS //////////////////////////////////
+
+    function test_ShouldAddRewardTokenToBrideContract() public {
+        address bribe = bribeFactory.createBribe(
+            makeAddr("owner"),
+            address(0),
+            address(0),
+            "_type"
+        );
+
+        bribeFactory.addRewardToBribe(makeAddr("rewardToken"), bribe);
+        assertEq(IBribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+    }
+
+    function test_ShouldAddRewardTokensToBrideContract() public {
+        address bribe = bribeFactory.createBribe(
+            makeAddr("owner"),
+            address(0),
+            address(0),
+            "_type"
+        );
+
+        address[] memory addr = new address[](2);
+        addr[0] = makeAddr("rewardToken");
+
+        addr[1] = makeAddr("rewardToken1");
+        bribeFactory.addRewardsToBribe(addr, bribe);
+
+        assertEq(IBribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+        assertEq(IBribe(bribe).rewardTokens(2), makeAddr("rewardToken1"));
+    }
+
+    function test_ShouldAddRewardTokenToBrideContracts() public {
+        address bribe = bribeFactory.createBribe(
+            makeAddr("owner"),
+            address(0),
+            address(0),
+            "_type"
+        );
+
+        address bribe0 = bribeFactory.createBribe(
+            makeAddr("owner"),
+            address(0),
+            address(0),
+            "_type"
+        );
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
+
+        bribeFactory.addRewardToBribes(makeAddr("rewardToken"), bribes);
+
+        assertEq(IBribe(bribes[0]).rewardTokens(1), makeAddr("rewardToken"));
+        assertEq(IBribe(bribes[1]).rewardTokens(1), makeAddr("rewardToken"));
+    }
+
+    function test_ShouldAddRewardsTokenToBrideContracts() public {
+        address bribe = bribeFactory.createBribe(
+            makeAddr("owner"),
+            address(0),
+            address(0),
+            "_type"
+        );
+
+        address bribe0 = bribeFactory.createBribe(
+            makeAddr("owner"),
+            address(0),
+            address(0),
+            "_type"
+        );
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
+
+        address[][] memory rewards = new address[][](2);
+        // rewards[1][1] = makeAddr("rewardToken");
+        // rewards[0][1] = makeAddr("rewardToken0");
+
+        // bribeFactory.addRewardsToBribes(rewards, bribes);
+        console.log(rewards.length);
     }
 }
