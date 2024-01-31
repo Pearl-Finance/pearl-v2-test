@@ -7,6 +7,12 @@ import "openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./Bribe.sol";
 
 contract BribeFactory is AccessControlUpgradeable {
+    // change to custom error
+    error BribeFactory_Token_Already_Added();
+    error BribeFactory_Zero_Address_Not_Allowed();
+    error BribeFactory_Tokens_Cannot_Be_The_Same();
+    error BribeFactory_Not_A_Default_Reward_Token();
+
     bytes32 public constant BRIBE_ADMIN_ROLE = keccak256("BRIBE_ADMIN");
 
     address public last_bribe;
@@ -32,6 +38,8 @@ contract BribeFactory is AccessControlUpgradeable {
         for (uint256 i = 0; i < defaultRewardTokens.length; i++) {
             _pushDefaultRewardToken(defaultRewardTokens[i]);
         }
+
+        // emit event
     }
 
     /// @notice create a bribe contract
@@ -46,16 +54,28 @@ contract BribeFactory is AccessControlUpgradeable {
             _checkRole(DEFAULT_ADMIN_ROLE);
         }
 
+        if (_token0 != address(0) || _token1 != address(0)) {
+            if (_token0 == _token1)
+                revert BribeFactory_Tokens_Cannot_Be_The_Same();
+        }
+
         Bribe lastBribe = new Bribe(_owner, voter, address(this), _type);
 
         if (_token0 != address(0)) lastBribe.addReward(_token0);
         if (_token1 != address(0)) lastBribe.addReward(_token1);
+
+        // check if token0 and token1 is not the same
+        // if an address is 0 that means no address for reward?
+        // must a bribe have a reward token added upon deployment?
+        // that means two bribes can have same tokens?
 
         lastBribe.addRewards(defaultRewardToken);
 
         last_bribe = address(lastBribe);
         _bribes.push(last_bribe);
         return last_bribe;
+
+        // emit event
     }
 
     /* -----------------------------------------------------------------------------
@@ -70,17 +90,23 @@ contract BribeFactory is AccessControlUpgradeable {
     function setVoter(address _Voter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_Voter != address(0));
         voter = _Voter;
+
+        // emit event
     }
 
     function pushDefaultRewardToken(
         address _token
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pushDefaultRewardToken(_token);
+        // emit event
     }
 
     function _pushDefaultRewardToken(address _token) internal {
-        require(_token != address(0), "zero address not allowed");
-        require(!isDefaultRewardToken[_token], "token already added");
+        if (_token == address(0))
+            revert BribeFactory_Zero_Address_Not_Allowed();
+        if (isDefaultRewardToken[_token])
+            revert BribeFactory_Token_Already_Added();
+
         isDefaultRewardToken[_token] = true;
         defaultRewardToken.push(_token);
     }
@@ -88,7 +114,9 @@ contract BribeFactory is AccessControlUpgradeable {
     function removeDefaultRewardToken(
         address _token
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(isDefaultRewardToken[_token], "not a default reward token");
+        if (!isDefaultRewardToken[_token])
+            revert BribeFactory_Not_A_Default_Reward_Token();
+
         uint256 i = 0;
         for (i; i < defaultRewardToken.length; i++) {
             if (defaultRewardToken[i] == _token) {
@@ -100,6 +128,7 @@ contract BribeFactory is AccessControlUpgradeable {
                 break;
             }
         }
+        // emit event
     }
 
     /* -----------------------------------------------------------------------------

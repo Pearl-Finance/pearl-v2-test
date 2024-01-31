@@ -70,7 +70,7 @@ contract Bribe is IBribe, ReentrancyGuard {
             _bribeFactory != address(0) &&
                 _voter != address(0) &&
                 _owner != address(0)
-        );
+        ); // add revert statement
         voter = _voter;
         bribeFactory = _bribeFactory;
         firstBribeTimestamp = 0;
@@ -328,6 +328,7 @@ contract Bribe is IBribe, ReentrancyGuard {
     }
 
     function _addReward(address _rewardsToken) internal {
+        // should revert if token already exist
         if (!isRewardToken[_rewardsToken]) {
             isRewardToken[_rewardsToken] = true;
             rewardTokens.push(_rewardsToken);

@@ -260,4 +260,29 @@ contract BribeFactoryTest is Test {
         // bribeFactory.addRewardsToBribes(rewards, bribes);
         console.log(rewards.length);
     }
+
+    // function test_ShouldSetBribeVoter() public {
+    //     address bribe = bribeFactory.createBribe(
+    //         makeAddr("owner"),
+    //         address(0),
+    //         address(0),
+    //         "_type"
+    //     );
+
+    //     address bribe0 = bribeFactory.createBribe(
+    //         makeAddr("owner"),
+    //         address(0),
+    //         address(0),
+    //         "_type"
+    //     );
+    //     address[] memory bribes = new address[](2);
+    //     bribes[0] = bribe;
+    //     bribes[1] = bribe0;
+
+    //     makeAddr("voter");
+    //     bribeFactory.setBribeVoter(bribes, makeAddr("voter"));
+
+    //     //     assertEq(IBribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+    //     //     assertEq(IBribe(bribe).rewardTokens(2), makeAddr("rewardToken1"));
+    // }
 }
