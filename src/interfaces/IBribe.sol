@@ -2,62 +2,53 @@
 pragma solidity ^0.8.0;
 
 interface IBribe {
-  struct Reward {
-    uint256 periodFinish;
-    uint256 rewardsPerEpoch;
-    uint256 lastUpdateTime;
-  }
+    struct Reward {
+        uint256 periodFinish;
+        uint256 rewardsPerEpoch;
+        uint256 lastUpdateTime;
+    }
 
-  function _deposit(uint256 amount, address account) external;
+    function owner() external view returns (address);
 
-  function _withdraw(uint256 amount, address account) external;
+    function voter() external view returns (address);
 
-  function addReward(address) external;
+    function minter() external view returns (address);
 
-  function balanceOfAt(
-    address account,
-    uint256 _timestamp
-  ) external view returns (uint256);
+    function _deposit(uint256 amount, address account) external;
 
-  function earned(
-    address account,
-    address _rewardToken
-  ) external view returns (uint256);
+    function _withdraw(uint256 amount, address account) external;
 
-  function emergencyRecoverERC20(
-    address tokenAddress,
-    uint256 tokenAmount
-  ) external;
+    function addReward(address) external;
 
-  function firstBribeTimestamp() external view returns (uint256);
+    function balanceOfAt(address account, uint256 _timestamp) external view returns (uint256);
 
-  function getEpochStart() external view returns (uint256);
+    function earned(address account, address _rewardToken) external view returns (uint256);
 
-  function getNextEpochStart() external view returns (uint256);
+    function emergencyRecoverERC20(address tokenAddress, uint256 tokenAmount) external;
 
-  function getRewardForOwner(address account, address[] memory tokens) external;
+    function firstBribeTimestamp() external view returns (uint256);
 
-  function notifyRewardAmount(address token, uint256 amount) external;
+    function getEpochStart() external view returns (uint256);
 
-  function recoverERC20AndUpdateData(
-    address tokenAddress,
-    uint256 tokenAmount
-  ) external;
+    function getNextEpochStart() external view returns (uint256);
 
-  function rewardData(
-    address _token,
-    uint256 _timestamp
-  ) external view returns (Reward memory);
+    function getRewardForOwner(address account, address[] memory tokens) external;
 
-  function rewardTokens(uint256 _index) external view returns (address);
+    function notifyRewardAmount(address token, uint256 amount) external;
 
-  function rewardsListLength() external view returns (uint256);
+    function recoverERC20AndUpdateData(address tokenAddress, uint256 tokenAmount) external;
 
-  function setMinter(address _minter) external;
+    function rewardData(address _token, uint256 _timestamp) external view returns (Reward memory);
 
-  function setOwner(address _owner) external;
+    function rewardTokens(uint256 _index) external view returns (address);
 
-  function setVoter(address _voter) external;
+    function rewardsListLength() external view returns (uint256);
 
-  function totalSupplyAt(uint256 _timestamp) external view returns (uint256);
+    function setMinter(address _minter) external;
+
+    function setOwner(address _owner) external;
+
+    function setVoter(address _voter) external;
+
+    function totalSupplyAt(uint256 _timestamp) external view returns (uint256);
 }
