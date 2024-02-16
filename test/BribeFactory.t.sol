@@ -23,6 +23,7 @@ import {VotingEscrowVesting} from "pearl-token/src/governance/VotingEscrowVestin
  */
 
 contract BribeFactoryTest is Test {
+    error BribeFactory_Mismatch_Length();
     error BribeFactory_Token_Already_Added();
     error BribeFactory_Zero_Address_Not_Allowed();
     error BribeFactory_Tokens_Cannot_Be_The_Same();
@@ -417,7 +418,7 @@ contract BribeFactoryTest is Test {
         amounts[0][0] = 0.5 ether;
         amounts[1][0] = 0.6 ether;
 
-        vm.expectRevert("mismatch len");
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory_Mismatch_Length.selector));
         bribeFactory.recoverERC20From(bribes, tokens, amounts);
     }
 }
