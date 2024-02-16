@@ -26,18 +26,15 @@ import {TickMath} from "../libraries/TickMath.sol";
  * For detailed function descriptions and strategies, refer to protocol documentaion.
  */
 
-contract LiquidBox is
-    ILiquidBox,
-    Initializable,
-    ERC20Upgradeable,
-    ReentrancyGuardUpgradeable
-{
+contract LiquidBox is ILiquidBox, Initializable, ERC20Upgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using SafeMath for uint256;
 
-    /************************************************
+    /**
+     *
      *  NON UPGRADEABLE STORAGE
-     ***********************************************/
+     *
+     */
 
     struct Fees {
         uint256 amount0;
@@ -73,42 +70,22 @@ contract LiquidBox is
     mapping(address => Fees) public feePerShareClaimed;
     mapping(address => Fees) public feesOwed;
 
-    /************************************************
+    /**
+     *
      *  EVENTS
-     ***********************************************/
-    event Deposit(
-        address indexed sender,
-        address indexed to,
-        uint256 shares,
-        uint256 amount0,
-        uint256 amount1
-    );
+     *
+     */
+    event Deposit(address indexed sender, address indexed to, uint256 shares, uint256 amount0, uint256 amount1);
 
-    event Withdraw(
-        address indexed sender,
-        address indexed to,
-        uint256 shares,
-        uint256 amount0,
-        uint256 amount1
-    );
+    event Withdraw(address indexed sender, address indexed to, uint256 shares, uint256 amount0, uint256 amount1);
 
-    event Rebalance(
-        int24 tick,
-        uint256 totalAmount0,
-        uint256 totalAmount1,
-        uint256 totalSupply
-    );
+    event Rebalance(int24 tick, uint256 totalAmount0, uint256 totalAmount1, uint256 totalSupply);
 
     event UpdateMaxTotalSupply(uint256 maxTotalSupply);
 
     event SetFee(uint24 fee);
 
-    event CollectFees(
-        uint256 feesToVault0,
-        uint256 feesToVault1,
-        uint256 feesToOwner0,
-        uint256 feesToOwner1
-    );
+    event CollectFees(uint256 feesToVault0, uint256 feesToVault1, uint256 feesToOwner0, uint256 feesToOwner1);
     event ClaimManagementFee(uint256 feesToOwner0, uint256 feesToOwner1);
     event ClaimFee(uint256 feesToOwner0, uint256 feesToOwner1);
 
@@ -117,13 +94,10 @@ contract LiquidBox is
         _disableInitializers();
     }
 
-    function initialize(
-        address _pool,
-        address _owner,
-        address _boxFactory,
-        string memory _name,
-        string memory _symbol
-    ) public initializer {
+    function initialize(address _pool, address _owner, address _boxFactory, string memory _name, string memory _symbol)
+        public
+        initializer
+    {
         __ERC20_init(_name, _symbol);
         __ReentrancyGuard_init();
 
@@ -138,7 +112,8 @@ contract LiquidBox is
         boxFactory = _boxFactory;
 
         fee = 100000; //10% charged on pool fee as default
-        maxTotalSupply = 0; /// no cap
+        maxTotalSupply = 0;
+        /// no cap
     }
 
     //============================== MODIFIERS ==================================
@@ -196,13 +171,7 @@ contract LiquidBox is
     //============================== ACTION ==================================
 
     /// @inheritdoc ILiquidBox
-    function deposit(
-        uint256 amount0Desired,
-        uint256 amount1Desired,
-        address to,
-        uint256 amount0Min,
-        uint256 amount1Min
-    )
+    function deposit(uint256 amount0Desired, uint256 amount1Desired, address to, uint256 amount0Min, uint256 amount1Min)
         external
         override
         onlyManager
@@ -210,10 +179,7 @@ contract LiquidBox is
         updateFees(to)
         returns (uint256 shares, uint256 amount0, uint256 amount1)
     {
-        require(
-            amount0Desired > 0 || amount1Desired > 0,
-            "amount0Desired or amount1Desired"
-        );
+        require(amount0Desired > 0 || amount1Desired > 0, "amount0Desired or amount1Desired");
         require(to != address(0) && to != address(this), "to");
 
         // Calculate amounts proportional to vault's holdings
@@ -221,26 +187,17 @@ contract LiquidBox is
         require(shares > 0, "shares");
 
         // Pull in tokens from sender
-        if (amount0Desired > 0)
+        if (amount0Desired > 0) {
             token0.safeTransferFrom(msg.sender, address(this), amount0Desired);
-        if (amount1Desired > 0)
+        }
+        if (amount1Desired > 0) {
             token1.safeTransferFrom(msg.sender, address(this), amount1Desired);
+        }
 
         if (directDeposit) {
-            uint128 baseLiquidity = _liquidityForAmounts(
-                baseLower,
-                baseUpper,
-                getBalance0(),
-                getBalance1()
-            );
+            uint128 baseLiquidity = _liquidityForAmounts(baseLower, baseUpper, getBalance0(), getBalance1());
 
-            _mintLiquidity(
-                baseLower,
-                baseUpper,
-                baseLiquidity,
-                amount0Min,
-                amount1Min
-            );
+            _mintLiquidity(baseLower, baseUpper, baseLiquidity, amount0Min, amount1Min);
         }
 
         // Mint shares to recipient
@@ -248,19 +205,11 @@ contract LiquidBox is
         emit Deposit(msg.sender, to, shares, amount0, amount1);
 
         /// Check total supply cap not exceeded. A value of 0 means no base.
-        require(
-            maxTotalSupply == 0 || totalSupply() <= maxTotalSupply,
-            "maxTotalSupply"
-        );
+        require(maxTotalSupply == 0 || totalSupply() <= maxTotalSupply, "maxTotalSupply");
     }
 
     /// @inheritdoc ILiquidBox
-    function withdraw(
-        uint256 shares,
-        address to,
-        uint256 amount0Min,
-        uint256 amount1Min
-    )
+    function withdraw(uint256 shares, address to, uint256 amount0Min, uint256 amount1Min)
         external
         override
         onlyManager
@@ -314,20 +263,9 @@ contract LiquidBox is
         uint256 _amount0Min,
         uint256 _amount1Min
     ) external override onlyManager updateFees(address(0)) {
-        uint128 liquidity = _liquidityForAmounts(
-            _tickLower,
-            _tickUpper,
-            _amount0,
-            _amount1
-        );
+        uint128 liquidity = _liquidityForAmounts(_tickLower, _tickUpper, _amount0, _amount1);
 
-        _mintLiquidity(
-            _tickLower,
-            _tickUpper,
-            liquidity,
-            _amount0Min,
-            _amount1Min
-        );
+        _mintLiquidity(_tickLower, _tickUpper, liquidity, _amount0Min, _amount1Min);
     }
 
     /// @inheritdoc ILiquidBox
@@ -339,38 +277,15 @@ contract LiquidBox is
         uint256 _amount0MinMint,
         uint256 _amount1MinMint
     ) external override onlyManager nonReentrant updateFees(address(0)) {
-        require(
-            _baseLower < _baseUpper &&
-                _baseLower % tickSpacing == 0 &&
-                _baseUpper % tickSpacing == 0,
-            "tick"
-        );
+        require(_baseLower < _baseUpper && _baseLower % tickSpacing == 0 && _baseUpper % tickSpacing == 0, "tick");
 
-        (uint128 burnLiquidity, , , , ) = _position(baseLower, baseUpper);
+        (uint128 burnLiquidity,,,,) = _position(baseLower, baseUpper);
 
-        _burnLiquidity(
-            baseLower,
-            baseUpper,
-            burnLiquidity,
-            address(this),
-            _amount0MinBurn,
-            _amount1MinBurn
-        );
+        _burnLiquidity(baseLower, baseUpper, burnLiquidity, address(this), _amount0MinBurn, _amount1MinBurn);
 
-        uint128 mintLiquidity = _liquidityForAmounts(
-            _baseLower,
-            _baseUpper,
-            getBalance0(),
-            getBalance1()
-        );
+        uint128 mintLiquidity = _liquidityForAmounts(_baseLower, _baseUpper, getBalance0(), getBalance1());
 
-        _mintLiquidity(
-            _baseLower,
-            _baseUpper,
-            mintLiquidity,
-            _amount0MinMint,
-            _amount1MinMint
-        );
+        _mintLiquidity(_baseLower, _baseUpper, mintLiquidity, _amount0MinMint, _amount1MinMint);
 
         baseLower = _baseLower;
         baseUpper = _baseUpper;
@@ -378,15 +293,10 @@ contract LiquidBox is
 
         //notify liquidity update to gaugeALM
         if (gauge != address(0)) {
-            IGaugeV2ALM(gauge).rebalanceGaugeLiquidity(
-                _baseLower,
-                _baseUpper,
-                burnLiquidity,
-                mintLiquidity
-            );
+            IGaugeV2ALM(gauge).rebalanceGaugeLiquidity(_baseLower, _baseUpper, burnLiquidity, mintLiquidity);
         }
 
-        (, int24 tick, , , , , ) = pool.slot0();
+        (, int24 tick,,,,,) = pool.slot0();
         emit Rebalance(tick, getBalance0(), getBalance1(), totalSupply());
     }
 
@@ -414,10 +324,7 @@ contract LiquidBox is
     }
 
     /// @inheritdoc ILiquidBox
-    function claimFees(
-        address from,
-        address to
-    )
+    function claimFees(address from, address to)
         external
         nonReentrant
         onlyManager
@@ -429,9 +336,7 @@ contract LiquidBox is
     }
 
     /// @inheritdoc ILiquidBox
-    function claimManagementFees(
-        address to
-    )
+    function claimManagementFees(address to)
         external
         override
         onlyManager
@@ -455,11 +360,7 @@ contract LiquidBox is
     }
 
     /// @dev Callback for Pearl V2 pool.
-    function uniswapV3SwapCallback(
-        int256 amount0Delta,
-        int256 amount1Delta,
-        bytes calldata data
-    ) external {
+    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata data) external {
         require(msg.sender == address(pool), "pool");
         if (amount0Delta > 0) {
             require(uint256(amount0Delta) <= getBalance0(), "balance0");
@@ -480,11 +381,7 @@ contract LiquidBox is
      * @dev Reverts if the caller is not the Pearl V2 pool contract
      * @dev Transfers the received amounts of token0 and token1 to the caller's address
      */
-    function uniswapV3MintCallback(
-        uint256 amount0,
-        uint256 amount1,
-        bytes calldata data
-    ) external {
+    function uniswapV3MintCallback(uint256 amount0, uint256 amount1, bytes calldata data) external {
         require(msg.sender == address(pool), "pool");
         if (amount0 > 0) token0.safeTransfer(msg.sender, amount0);
         if (amount1 > 0) token1.safeTransfer(msg.sender, amount1);
@@ -502,35 +399,18 @@ contract LiquidBox is
      * @notice Update fee for source and destination accounts
      * before transfering lp tokens.
      */
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
         _updateFees(from);
         _updateFees(to);
     }
 
     /// @dev Deposits liquidity in a range on the Uniswap pool.
-    function _mintLiquidity(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidity,
-        uint256 amount0Min,
-        uint256 amount1Min
-    ) internal {
+    function _mintLiquidity(int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 amount0Min, uint256 amount1Min)
+        internal
+    {
         if (liquidity > 0) {
-            (uint256 amount0, uint256 amount1) = pool.mint(
-                address(this),
-                tickLower,
-                tickUpper,
-                liquidity,
-                ""
-            );
-            require(
-                amount0 >= amount0Min && amount1 >= amount1Min,
-                "amountMin"
-            );
+            (uint256 amount0, uint256 amount1) = pool.mint(address(this), tickLower, tickUpper, liquidity, "");
+            require(amount0 >= amount0Min && amount1 >= amount1Min, "amountMin");
         }
     }
 
@@ -544,55 +424,31 @@ contract LiquidBox is
         uint256 amount1Min
     ) internal returns (uint256 amount0, uint256 amount1) {
         if (liquidity > 0) {
-            (uint256 burned0, uint256 burned1) = pool.burn(
-                tickLower,
-                tickUpper,
-                _toUint128(liquidity)
-            );
+            (uint256 burned0, uint256 burned1) = pool.burn(tickLower, tickUpper, _toUint128(liquidity));
             require(burned0 >= amount0Min && burned1 >= amount1Min, "slippage");
-            (amount0, amount1) = pool.collect(
-                account,
-                tickLower,
-                tickUpper,
-                type(uint128).max,
-                type(uint128).max
-            );
+            (amount0, amount1) = pool.collect(account, tickLower, tickUpper, type(uint128).max, type(uint128).max);
         }
     }
 
-    function _getShares(
-        uint256 deposit0,
-        uint256 deposit1
-    ) internal view returns (uint256 shares) {
+    function _getShares(uint256 deposit0, uint256 deposit1) internal view returns (uint256 shares) {
         uint256 totalSupply = totalSupply();
-        (uint256 total0, uint256 total1, , , ) = _getTotalAmounts();
+        (uint256 total0, uint256 total1,,,) = _getTotalAmounts();
 
         // If total supply > 0, vault can't be empty
         assert(totalSupply == 0 || total0 > 0 || total1 > 0);
 
         uint160 sqrtPrice = TickMath.getSqrtRatioAtTick(currentTick());
-        uint256 price = FullMath.mulDiv(
-            uint256(sqrtPrice).mul(uint256(sqrtPrice)),
-            PRECISION,
-            2 ** (96 * 2)
-        );
+        uint256 price = FullMath.mulDiv(uint256(sqrtPrice).mul(uint256(sqrtPrice)), PRECISION, 2 ** (96 * 2));
 
         shares = deposit1.add(deposit0.mul(price).div(PRECISION));
 
         if (totalSupply != 0) {
             uint256 pool0PricedInToken1 = total0.mul(price).div(PRECISION);
-            shares = FullMath.mulDiv(
-                shares,
-                totalSupply,
-                pool0PricedInToken1.add(total1)
-            );
+            shares = FullMath.mulDiv(shares, totalSupply, pool0PricedInToken1.add(total1));
         }
     }
 
-    function _claimFees(
-        address from,
-        address to
-    ) internal returns (uint256 collectedfees0, uint256 collectedfees1) {
+    function _claimFees(address from, address to) internal returns (uint256 collectedfees0, uint256 collectedfees1) {
         Fees storage owed = feesOwed[from];
         collectedfees0 = owed.amount0;
         collectedfees1 = owed.amount1;
@@ -624,34 +480,18 @@ contract LiquidBox is
 
     /// @dev Do zero-burns to poke a position on Uniswap so earned fees are
     ///updated. Should be called if total amounts needs to include up-to-date fees.
-    function _poke(
-        int24 tickLower,
-        int24 tickUpper
-    ) internal returns (uint256 feesToPool0, uint256 feesToPool1) {
-        (uint128 liquidity, , , , ) = _position(tickLower, tickUpper);
+    function _poke(int24 tickLower, int24 tickUpper) internal returns (uint256 feesToPool0, uint256 feesToPool1) {
+        (uint128 liquidity,,,,) = _position(tickLower, tickUpper);
         if (liquidity > 0) {
             pool.burn(tickLower, tickUpper, 0);
-            (feesToPool0, feesToPool1) = pool.collect(
-                address(this),
-                tickLower,
-                tickUpper,
-                type(uint128).max,
-                type(uint128).max
-            );
+            (feesToPool0, feesToPool1) =
+                pool.collect(address(this), tickLower, tickUpper, type(uint128).max, type(uint128).max);
 
             unchecked {
                 if (feesToPool0 > 0 || feesToPool1 > 0) {
                     // Update accrued protocol fees
-                    uint256 fees0 = FullMath.mulDivRoundingUp(
-                        feesToPool0,
-                        fee,
-                        1e6
-                    );
-                    uint256 fees1 = FullMath.mulDivRoundingUp(
-                        feesToPool1,
-                        fee,
-                        1e6
-                    );
+                    uint256 fees0 = FullMath.mulDivRoundingUp(feesToPool0, fee, 1e6);
+                    uint256 fees1 = FullMath.mulDivRoundingUp(feesToPool1, fee, 1e6);
 
                     managementFees.amount0 = managementFees.amount0.add(fees0);
                     managementFees.amount1 = managementFees.amount1.add(fees1);
@@ -660,17 +500,9 @@ contract LiquidBox is
                     feesToPool1 = feesToPool1.sub(fees1);
 
                     //Update total collected fees in box
-                    feePerShare.amount0 += FullMath.mulDiv(
-                        feesToPool0,
-                        PRECISION,
-                        totalSupply()
-                    );
+                    feePerShare.amount0 += FullMath.mulDiv(feesToPool0, PRECISION, totalSupply());
 
-                    feePerShare.amount1 += FullMath.mulDiv(
-                        feesToPool1,
-                        PRECISION,
-                        totalSupply()
-                    );
+                    feePerShare.amount1 += FullMath.mulDiv(feesToPool1, PRECISION, totalSupply());
 
                     usersFees.amount0 += feesToPool0;
                     usersFees.amount1 += feesToPool1;
@@ -681,44 +513,35 @@ contract LiquidBox is
     }
 
     /// @dev Wrapper around `LiquidityAmounts.getLiquidityForAmounts()`.
-    function _liquidityForAmounts(
-        int24 tickLower,
-        int24 tickUpper,
-        uint256 amount0,
-        uint256 amount1
-    ) internal view returns (uint128) {
-        (uint160 sqrtRatioX96, , , , , , ) = pool.slot0();
-        return
-            LiquidityAmounts.getLiquidityForAmounts(
-                sqrtRatioX96,
-                TickMath.getSqrtRatioAtTick(tickLower),
-                TickMath.getSqrtRatioAtTick(tickUpper),
-                amount0,
-                amount1
-            );
+    function _liquidityForAmounts(int24 tickLower, int24 tickUpper, uint256 amount0, uint256 amount1)
+        internal
+        view
+        returns (uint128)
+    {
+        (uint160 sqrtRatioX96,,,,,,) = pool.slot0();
+        return LiquidityAmounts.getLiquidityForAmounts(
+            sqrtRatioX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            amount0,
+            amount1
+        );
     }
 
     /// @dev Wrapper around `IPearlV2Pool.positions()`.
-    function _position(
-        int24 tickLower,
-        int24 tickUpper
-    ) internal view returns (uint128, uint256, uint256, uint128, uint128) {
-        bytes32 positionKey = keccak256(
-            abi.encodePacked(address(this), tickLower, tickUpper)
-        );
+    function _position(int24 tickLower, int24 tickUpper)
+        internal
+        view
+        returns (uint128, uint256, uint256, uint128, uint128)
+    {
+        bytes32 positionKey = keccak256(abi.encodePacked(address(this), tickLower, tickUpper));
         return pool.positions(positionKey);
     }
 
     function _getTotalAmounts()
         internal
         view
-        returns (
-            uint256 total0,
-            uint256 total1,
-            uint256 pool0,
-            uint256 pool1,
-            uint128 liquidity
-        )
+        returns (uint256 total0, uint256 total1, uint256 pool0, uint256 pool1, uint128 liquidity)
     {
         (pool0, pool1, liquidity) = _getPositionAmounts();
         // Sum up balance base, range and base
@@ -731,22 +554,11 @@ contract LiquidBox is
      * owed fees but excludes the proportion of fees that will be paid to the
      * protocol. Doesn't include fees accrued since last poke.
      */
-    function _getPositionAmounts()
-        internal
-        view
-        returns (uint256 amount0, uint256 amount1, uint128 liquidity)
-    {
+    function _getPositionAmounts() internal view returns (uint256 amount0, uint256 amount1, uint128 liquidity) {
         uint128 tokensOwed0; //fee collected in token0
         uint128 tokensOwed1; //fee collected in token1
-        (liquidity, , , tokensOwed0, tokensOwed1) = _position(
-            baseLower,
-            baseUpper
-        );
-        (amount0, amount1) = _amountsForLiquidity(
-            baseLower,
-            baseUpper,
-            liquidity
-        );
+        (liquidity,,, tokensOwed0, tokensOwed1) = _position(baseLower, baseUpper);
+        (amount0, amount1) = _amountsForLiquidity(baseLower, baseUpper, liquidity);
 
         // Subtract fees
         uint256 oneMinusFee = uint256(1e6).sub(fee);
@@ -755,29 +567,20 @@ contract LiquidBox is
     }
 
     /// @dev Wrapper around `LiquidityAmounts.getAmountsForLiquidity()`.
-    function _amountsForLiquidity(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidity
-    ) internal view returns (uint256, uint256) {
-        (uint160 sqrtRatioX96, , , , , , ) = pool.slot0();
-        return
-            LiquidityAmounts.getAmountsForLiquidity(
-                sqrtRatioX96,
-                TickMath.getSqrtRatioAtTick(tickLower),
-                TickMath.getSqrtRatioAtTick(tickUpper),
-                liquidity
-            );
+    function _amountsForLiquidity(int24 tickLower, int24 tickUpper, uint128 liquidity)
+        internal
+        view
+        returns (uint256, uint256)
+    {
+        (uint160 sqrtRatioX96,,,,,,) = pool.slot0();
+        return LiquidityAmounts.getAmountsForLiquidity(
+            sqrtRatioX96, TickMath.getSqrtRatioAtTick(tickLower), TickMath.getSqrtRatioAtTick(tickUpper), liquidity
+        );
     }
 
-    function _sharesToLiquidity(
-        int24 tickLower,
-        int24 tickUpper,
-        uint256 shares
-    ) internal view returns (uint128) {
-        (uint128 totalLiquidity, , , , ) = _position(tickLower, tickUpper);
-        return
-            _toUint128(FullMath.mulDiv(totalLiquidity, shares, totalSupply()));
+    function _sharesToLiquidity(int24 tickLower, int24 tickUpper, uint256 shares) internal view returns (uint128) {
+        (uint128 totalLiquidity,,,,) = _position(tickLower, tickUpper);
+        return _toUint128(FullMath.mulDiv(totalLiquidity, shares, totalSupply()));
     }
 
     /// @dev poke a position on PearlV3 so earned fees are updated.
@@ -789,71 +592,50 @@ contract LiquidBox is
 
     /// @inheritdoc ILiquidBox
     function getBalance0() public view override returns (uint256) {
-        return
-            token0.balanceOf(address(this)).sub(usersFees.amount0).sub(
-                managementFees.amount0
-            );
+        return token0.balanceOf(address(this)).sub(usersFees.amount0).sub(managementFees.amount0);
     }
 
     /// @inheritdoc ILiquidBox
     function getBalance1() public view override returns (uint256) {
-        return
-            token1.balanceOf(address(this)).sub(usersFees.amount1).sub(
-                managementFees.amount1
-            );
+        return token1.balanceOf(address(this)).sub(usersFees.amount1).sub(managementFees.amount1);
     }
 
     /// @return tick Uniswap pool's current price tick
     function currentTick() public view returns (int24 tick) {
-        (, tick, , , , , ) = pool.slot0();
+        (, tick,,,,,) = pool.slot0();
     }
 
     /// @inheritdoc ILiquidBox
-    function getSqrtTwapX96(
-        uint32 twapInterval
-    ) external view override returns (uint160 sqrtPriceX96) {
+    function getSqrtTwapX96(uint32 twapInterval) external view override returns (uint160 sqrtPriceX96) {
         if (twapInterval == 0) {
             /// return the current price if _twapInterval == 0
-            (sqrtPriceX96, , , , , , ) = pool.slot0();
+            (sqrtPriceX96,,,,,,) = pool.slot0();
         } else {
             uint32[] memory secondsAgos = new uint32[](2);
-            secondsAgos[0] = twapInterval; /// from (before)
-            secondsAgos[1] = 0; /// to (now)
+            secondsAgos[0] = twapInterval;
+            /// from (before)
+            secondsAgos[1] = 0;
+            /// to (now)
 
-            (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);
+            (int56[] memory tickCumulatives,) = pool.observe(secondsAgos);
 
             /// tick(imprecise as it's an integer) to price
-            sqrtPriceX96 = TickMath.getSqrtRatioAtTick(
-                int24(
-                    (tickCumulatives[1] - tickCumulatives[0]) /
-                        int32(twapInterval)
-                )
-            );
+            sqrtPriceX96 =
+                TickMath.getSqrtRatioAtTick(int24((tickCumulatives[1] - tickCumulatives[0]) / int32(twapInterval)));
         }
     }
 
     /// @inheritdoc ILiquidBox
-    function getPoolLiquidityPerShare()
-        public
-        view
-        override
-        returns (uint256 liquidityPerShare)
-    {
-        (uint128 totalLiquidity, , , , ) = _position(baseLower, baseUpper);
+    function getPoolLiquidityPerShare() public view override returns (uint256 liquidityPerShare) {
+        (uint128 totalLiquidity,,,,) = _position(baseLower, baseUpper);
 
         if (totalSupply() == 0) return 0;
 
-        liquidityPerShare = FullMath.mulDiv(
-            totalLiquidity,
-            PRECISION,
-            totalSupply()
-        );
+        liquidityPerShare = FullMath.mulDiv(totalLiquidity, PRECISION, totalSupply());
     }
 
     /// @inheritdoc ILiquidBox
-    function getSharesAmount(
-        uint256 shares
-    )
+    function getSharesAmount(uint256 shares)
         public
         view
         override
@@ -867,20 +649,12 @@ contract LiquidBox is
             amount0 = FullMath.mulDiv(getBalance0(), shares, totalSupply);
             amount1 = FullMath.mulDiv(getBalance1(), shares, totalSupply);
 
-            (
-                uint128 totalLiquidity,
-                ,
-                ,
-                uint256 tokensOwed0,
-                uint256 tokensOwed1
-            ) = _position(baseLower, baseUpper);
+            (uint128 totalLiquidity,,, uint256 tokensOwed0, uint256 tokensOwed1) = _position(baseLower, baseUpper);
 
             liquidity = FullMath.mulDiv(totalLiquidity, shares, totalSupply);
 
-            (
-                uint256 liquidityAmount0,
-                uint256 liquidityAmount1
-            ) = _amountsForLiquidity(baseLower, baseUpper, uint128(liquidity));
+            (uint256 liquidityAmount0, uint256 liquidityAmount1) =
+                _amountsForLiquidity(baseLower, baseUpper, uint128(liquidity));
 
             //Calculate tokens owed while zero burn for the given shares
             tokensOwed0 = tokensOwed0.mul(shares).div(totalSupply);
@@ -888,12 +662,8 @@ contract LiquidBox is
 
             // Subtract fees
             uint256 oneMinusFee = uint256(1e6).sub(fee);
-            amount0 = amount0.add(liquidityAmount0).add(
-                uint256(tokensOwed0).mul(oneMinusFee).div(1e6)
-            );
-            amount1 = amount1.add(liquidityAmount1).add(
-                uint256(tokensOwed1).mul(oneMinusFee).div(1e6)
-            );
+            amount0 = amount0.add(liquidityAmount0).add(uint256(tokensOwed0).mul(oneMinusFee).div(1e6));
+            amount1 = amount1.add(liquidityAmount1).add(uint256(tokensOwed1).mul(oneMinusFee).div(1e6));
         }
     }
 
@@ -902,32 +672,20 @@ contract LiquidBox is
         external
         view
         override
-        returns (
-            uint256 total0,
-            uint256 total1,
-            uint256 pool0,
-            uint256 pool1,
-            uint128 liquidity
-        )
+        returns (uint256 total0, uint256 total1, uint256 pool0, uint256 pool1, uint128 liquidity)
     {
         return _getTotalAmounts();
     }
 
     ///@notice see earned rewards for user
-    function earnedFees(
-        address account
-    ) public view returns (uint256 amount0, uint256 amount1) {
+    function earnedFees(address account) public view returns (uint256 amount0, uint256 amount1) {
         Fees memory userFeesPaidPerToken = feePerShareClaimed[account];
         // see if there is any difference that need to be accrued
         uint256 _delta0 = feePerShare.amount0.sub(userFeesPaidPerToken.amount0);
         uint256 _delta1 = feePerShare.amount1.sub(userFeesPaidPerToken.amount1);
 
-        amount0 = FullMath.mulDiv(balanceOf(account), _delta0, PRECISION).add(
-            feesOwed[account].amount0
-        );
+        amount0 = FullMath.mulDiv(balanceOf(account), _delta0, PRECISION).add(feesOwed[account].amount0);
 
-        amount1 = FullMath.mulDiv(balanceOf(account), _delta1, PRECISION).add(
-            feesOwed[account].amount1
-        );
+        amount1 = FullMath.mulDiv(balanceOf(account), _delta1, PRECISION).add(feesOwed[account].amount1);
     }
 }

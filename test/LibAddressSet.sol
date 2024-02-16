@@ -16,10 +16,7 @@ library LibAddressSet {
         }
     }
 
-    function rand(
-        AddressSet storage s,
-        uint256 seed
-    ) internal view returns (address) {
+    function rand(AddressSet storage s, uint256 seed) internal view returns (address) {
         if (s.addrs.length > 0) {
             return s.addrs[seed % s.addrs.length];
         } else {
@@ -27,21 +24,17 @@ library LibAddressSet {
         }
     }
 
-    function reduce(
-        AddressSet storage s,
-        uint256 acc,
-        function(uint256, address) external returns (uint256) func
-    ) internal returns (uint256) {
+    function reduce(AddressSet storage s, uint256 acc, function(uint256, address) external returns (uint256) func)
+        internal
+        returns (uint256)
+    {
         for (uint256 i; i < s.addrs.length; ++i) {
             acc = func(acc, s.addrs[i]);
         }
         return acc;
     }
 
-    function forEach(
-        AddressSet storage s,
-        function(address) external func
-    ) internal {
+    function forEach(AddressSet storage s, function(address) external func) internal {
         for (uint256 i; i < s.addrs.length; ++i) {
             func(s.addrs[i]);
         }

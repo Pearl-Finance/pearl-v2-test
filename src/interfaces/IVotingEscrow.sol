@@ -19,28 +19,15 @@ interface IVotingEscrow is IERC721Enumerable, IERC721Metadata, IVotes {
 
     function getLockedAmount(uint256 tokenId) external view returns (uint256);
 
-    function getMintingTimestamp(
-        uint256 tokenId
-    ) external view returns (uint256);
+    function getMintingTimestamp(uint256 tokenId) external view returns (uint256);
 
-    function getPastTotalVotingPower(
-        uint256 timepoint
-    ) external view returns (uint256);
+    function getPastTotalVotingPower(uint256 timepoint) external view returns (uint256);
 
-    function getPastVotingPower(
-        uint256 tokenId,
-        uint256 timepoint
-    ) external view returns (uint256);
+    function getPastVotingPower(uint256 tokenId, uint256 timepoint) external view returns (uint256);
 
-    function getRemainingVestingDuration(
-        uint256 tokenId
-    ) external view returns (uint256);
+    function getRemainingVestingDuration(uint256 tokenId) external view returns (uint256);
 
-    function mint(
-        address receiver,
-        uint208 lockedBalance,
-        uint256 vestingDuration
-    ) external returns (uint256);
+    function mint(address receiver, uint208 lockedBalance, uint256 vestingDuration) external returns (uint256);
 
     function burn(address receiver, uint256 tokenId) external;
 
@@ -48,15 +35,9 @@ interface IVotingEscrow is IERC721Enumerable, IERC721Metadata, IVotes {
 
     function merge(uint256 tokenId, uint256 intoTokenId) external;
 
-    function split(
-        uint256 tokenId,
-        uint256[] calldata shares
-    ) external returns (uint256[] memory);
+    function split(uint256 tokenId, uint256[] calldata shares) external returns (uint256[] memory);
 
-    function updateVestingDuration(
-        uint256 tokenId,
-        uint256 newDuration
-    ) external;
+    function updateVestingDuration(uint256 tokenId, uint256 newDuration) external;
 
     function vestingContract() external view returns (address);
 }

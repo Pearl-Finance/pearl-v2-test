@@ -34,6 +34,7 @@ contract RewardsDistributorTest is Test {
     error NoClaimableAmount();
 
     using SafeERC20 for IERC20;
+
     RewardsDistributor public rewardsDistributor;
 
     address pearlHolder = 0x95e3664633A8650CaCD2c80A0F04fb56F65DF300;
@@ -47,11 +48,7 @@ contract RewardsDistributorTest is Test {
         RewardsDistributor main = new RewardsDistributor();
 
         ERC1967Proxy mainProxy = new ERC1967Proxy(
-            address(main),
-            abi.encodeWithSelector(
-                RewardsDistributor.initialize.selector,
-                votingEscrow
-            )
+            address(main), abi.encodeWithSelector(RewardsDistributor.initialize.selector, votingEscrow)
         );
 
         rewardsDistributor = RewardsDistributor(address(mainProxy));
@@ -67,11 +64,7 @@ contract RewardsDistributorTest is Test {
         assertEq(main.owner(), address(0));
 
         ERC1967Proxy proxy = new ERC1967Proxy(
-            address(main),
-            abi.encodeWithSelector(
-                RewardsDistributor.initialize.selector,
-                votingEscrow
-            )
+            address(main), abi.encodeWithSelector(RewardsDistributor.initialize.selector, votingEscrow)
         );
 
         rewardsDistributor = RewardsDistributor(address(proxy));
@@ -99,9 +92,7 @@ contract RewardsDistributorTest is Test {
         vm.startPrank(address(8));
         rewardsDistributor.notifyRewardAmount(20000);
 
-        vm.expectRevert(
-            "RewardsDistributor: reward for current epoch already set"
-        );
+        vm.expectRevert("RewardsDistributor: reward for current epoch already set");
 
         rewardsDistributor.notifyRewardAmount(20000);
     }
@@ -111,9 +102,7 @@ contract RewardsDistributorTest is Test {
         assertEq(rewardToClaim, 0);
     }
 
-    function test_should_return_an_amount_to_claim_when_user_have_minted()
-        public
-    {
+    function test_should_return_an_amount_to_claim_when_user_have_minted() public {
         uint256 nftID = __mint();
         vm.startPrank(address(8));
         // user can't claim rewards in same epoch they mint
@@ -145,23 +134,17 @@ contract RewardsDistributorTest is Test {
         vm.warp(block.timestamp + 7 days);
         rewardsDistributor.notifyRewardAmount(20000 ether);
 
-        (bool success0, bytes memory data0) = votingEscrow.staticcall(
-            abi.encodeWithSignature("getLockedAmount(uint256)", nftID)
-        );
+        (bool success0, bytes memory data0) =
+            votingEscrow.staticcall(abi.encodeWithSignature("getLockedAmount(uint256)", nftID));
 
         assert(success0);
         uint256 rewardToClaim = rewardsDistributor.claim(nftID);
         assertGt(rewardToClaim, 0);
 
-        (bool success00, bytes memory data00) = votingEscrow.staticcall(
-            abi.encodeWithSignature("getLockedAmount(uint256)", nftID)
-        );
+        (bool success00, bytes memory data00) =
+            votingEscrow.staticcall(abi.encodeWithSignature("getLockedAmount(uint256)", nftID));
 
-        console.log(
-            IERC20(rewardsDistributor.token()).balanceOf(
-                address(rewardsDistributor)
-            )
-        );
+        console.log(IERC20(rewardsDistributor.token()).balanceOf(address(rewardsDistributor)));
 
         assert(success00);
         assertGt(abi.decode(data00, (uint256)), abi.decode(data0, (uint256)));
@@ -188,9 +171,7 @@ contract RewardsDistributorTest is Test {
 
         vm.startPrank(owner);
 
-        uint256 contractBalanceBeforeTx = token.balanceOf(
-            address(rewardsDistributor)
-        );
+        uint256 contractBalanceBeforeTx = token.balanceOf(address(rewardsDistributor));
 
         assertEq(contractBalanceBeforeTx, 10000 ether);
         uint256 ownerBalanceBeforeTx = token.balanceOf(owner);
@@ -198,18 +179,14 @@ contract RewardsDistributorTest is Test {
         assertEq(ownerBalanceBeforeTx, 0);
         rewardsDistributor.withdrawERC20(address(token));
 
-        uint256 contractBalanceAfterTx = token.balanceOf(
-            address(rewardsDistributor)
-        );
+        uint256 contractBalanceAfterTx = token.balanceOf(address(rewardsDistributor));
 
         assertEq(contractBalanceAfterTx, 2000 ether);
         uint256 ownerBalanceAfterTx = token.balanceOf(owner);
         assertEq(ownerBalanceAfterTx, 8000 ether);
     }
 
-    function test_should_let_user_claim_reward_when_an_NFT_is_Fully_Vested()
-        public
-    {
+    function test_should_let_user_claim_reward_when_an_NFT_is_Fully_Vested() public {
         uint256 nftID = __mint();
         IERC20 token = IERC20(rewardsDistributor.token());
 
@@ -220,18 +197,11 @@ contract RewardsDistributorTest is Test {
         }
 
         vm.startPrank(VotingEscrowVesting);
-        (bool success, ) = votingEscrow.call(
-            abi.encodeWithSignature(
-                "updateVestingDuration(uint256,uint256)",
-                nftID,
-                0
-            )
-        );
+        (bool success,) = votingEscrow.call(abi.encodeWithSignature("updateVestingDuration(uint256,uint256)", nftID, 0));
         assert(success);
 
-        (bool success0, bytes memory data0) = votingEscrow.staticcall(
-            abi.encodeWithSignature("ownerOf(uint256)", nftID)
-        );
+        (bool success0, bytes memory data0) =
+            votingEscrow.staticcall(abi.encodeWithSignature("ownerOf(uint256)", nftID));
 
         assert(success0);
         assertEq(abi.decode(data0, (address)), address(6));
@@ -244,9 +214,7 @@ contract RewardsDistributorTest is Test {
         assertGt(token.balanceOf(address(6)), 0);
     }
 
-    function test_should_claim_twice_if_rewards_to_claim_is_above_50_epochs()
-        public
-    {
+    function test_should_claim_twice_if_rewards_to_claim_is_above_50_epochs() public {
         uint256 nftID = __mint();
         vm.startPrank(address(8));
         IERC20 token = IERC20(rewardsDistributor.token());
@@ -257,19 +225,12 @@ contract RewardsDistributorTest is Test {
         }
 
         vm.startPrank(VotingEscrowVesting);
-        (bool success, ) = votingEscrow.call(
-            abi.encodeWithSignature(
-                "updateVestingDuration(uint256,uint256)",
-                nftID,
-                0
-            )
-        );
+        (bool success,) = votingEscrow.call(abi.encodeWithSignature("updateVestingDuration(uint256,uint256)", nftID, 0));
 
         assert(success);
 
-        (bool success0, bytes memory data0) = votingEscrow.staticcall(
-            abi.encodeWithSignature("ownerOf(uint256)", nftID)
-        );
+        (bool success0, bytes memory data0) =
+            votingEscrow.staticcall(abi.encodeWithSignature("ownerOf(uint256)", nftID));
 
         assert(success0);
         assertEq(abi.decode(data0, (address)), address(6));
@@ -287,27 +248,15 @@ contract RewardsDistributorTest is Test {
 
     function __mint() internal returns (uint256 nftID) {
         vm.startPrank(pearlHolder);
-        IERC20(rewardsDistributor.token()).safeTransfer(
-            address(rewardsDistributor),
-            10000 ether
-        );
+        IERC20(rewardsDistributor.token()).safeTransfer(address(rewardsDistributor), 10000 ether);
         vm.stopPrank();
 
         vm.startPrank(address(6));
 
-        IERC20(rewardsDistributor.token()).safeIncreaseAllowance(
-            address(votingEscrow),
-            10 ether
-        );
+        IERC20(rewardsDistributor.token()).safeIncreaseAllowance(address(votingEscrow), 10 ether);
 
-        (bool success, bytes memory data) = votingEscrow.call(
-            abi.encodeWithSignature(
-                "mint(address,uint256,uint256)",
-                address(6),
-                10 ether,
-                3 weeks
-            )
-        );
+        (bool success, bytes memory data) =
+            votingEscrow.call(abi.encodeWithSignature("mint(address,uint256,uint256)", address(6), 10 ether, 3 weeks));
 
         assert(success);
         nftID = abi.decode(data, (uint256));

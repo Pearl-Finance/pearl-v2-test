@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+
 import {IERC20, SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Initializable} from "openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -49,12 +50,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
     mapping(uint256 tokenId => uint256 timestamp) public lastTokenClaim;
     mapping(uint256 epochTimestamp => uint256 amount) public epochReward;
 
-    event Claimed(
-        uint256 tokenId,
-        uint256 amount,
-        uint256 claim_epoch,
-        uint256 max_epoch
-    );
+    event Claimed(uint256 tokenId, uint256 amount, uint256 claim_epoch, uint256 max_epoch);
 
     error NoClaimableAmount();
 
@@ -116,9 +112,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         }
         if (epochTimestamp == _lastRewardEpochTimestamp) {
             if (epochReward[epochTimestamp] != 0) {
-                revert(
-                    "RewardsDistributor: reward for current epoch already set"
-                );
+                revert("RewardsDistributor: reward for current epoch already set");
             }
         }
         epochReward[epochTimestamp] += amount;
@@ -136,7 +130,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @return amount The total amount of rewards claimable by the given token ID.
      */
     function claimable(uint256 tokenId) public view returns (uint256 amount) {
-        (amount, ) = _claimable(tokenId);
+        (amount,) = _claimable(tokenId);
     }
 
     /**
@@ -144,9 +138,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param tokenId The token ID for which to calculate claimable rewards.
      * @return amount The total amount of rewards claimable by the given token ID.
      */
-    function _claimable(
-        uint256 tokenId
-    ) internal view returns (uint256 amount, uint256 lastClaimEpochTimestamp) {
+    function _claimable(uint256 tokenId) internal view returns (uint256 amount, uint256 lastClaimEpochTimestamp) {
         uint256 lastClaimTimestamp = lastTokenClaim[tokenId];
         if (lastClaimTimestamp == 0) {
             lastClaimTimestamp = ve.getMintingTimestamp(tokenId);
@@ -154,24 +146,12 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         }
         uint256 limit = 50; // max 50 past epochs at a time
         uint256 epochTimestamp = lastRewardEpochTimestamp;
-        lastClaimEpochTimestamp =
-            _toEpochTimestamp(lastClaimTimestamp) +
-            EPOCH_DURATION;
-        while (
-            lastClaimEpochTimestamp < epochTimestamp &&
-            (limit != 0 || amount == 0)
-        ) {
-            uint256 pastTotalVotingPower = ve.getPastTotalVotingPower(
-                lastClaimEpochTimestamp
-            );
+        lastClaimEpochTimestamp = _toEpochTimestamp(lastClaimTimestamp) + EPOCH_DURATION;
+        while (lastClaimEpochTimestamp < epochTimestamp && (limit != 0 || amount == 0)) {
+            uint256 pastTotalVotingPower = ve.getPastTotalVotingPower(lastClaimEpochTimestamp);
             if (pastTotalVotingPower != 0) {
-                uint256 pastVotingPower = ve.getPastVotingPower(
-                    tokenId,
-                    lastClaimEpochTimestamp
-                );
-                amount +=
-                    (epochReward[lastClaimEpochTimestamp] * pastVotingPower) /
-                    pastTotalVotingPower;
+                uint256 pastVotingPower = ve.getPastVotingPower(tokenId, lastClaimEpochTimestamp);
+                amount += (epochReward[lastClaimEpochTimestamp] * pastVotingPower) / pastTotalVotingPower;
             }
             unchecked {
                 lastClaimEpochTimestamp += EPOCH_DURATION;
@@ -217,9 +197,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param _timestamp The timestamp to convert.
      * @return The start timestamp of the epoch in which the given timestamp falls.
      */
-    function _toEpochTimestamp(
-        uint256 _timestamp
-    ) internal pure returns (uint256) {
+    function _toEpochTimestamp(uint256 _timestamp) internal pure returns (uint256) {
         return (_timestamp / EPOCH_DURATION) * EPOCH_DURATION;
     }
 

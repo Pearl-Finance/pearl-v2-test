@@ -11,18 +11,19 @@ import {IVotingEscrow} from "../src/interfaces/IVotingEscrow.sol";
 import {RewardsDistributor} from "../src/v1.5/RewardsDistributor.sol";
 
 interface IERC20EXTT {
-    function balanceOf(address from) external returns (uint);
+    function balanceOf(address from) external returns (uint256);
 }
 
 contract Handler is CommonBase, StdCheats, StdUtils {
     using LibAddressSet for AddressSet;
+
     AddressSet internal _actors;
 
     IPearl public pearl;
     IVotingEscrow public ve;
     RewardsDistributor public rewardsDistributor;
 
-    mapping(address => uint) ids;
+    mapping(address => uint256) ids;
     mapping(bytes32 => uint256) public calls;
 
     address currentActor;
@@ -30,11 +31,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     uint256 public ghost_mintedSum;
     uint256 public ghost_actualMint;
 
-    constructor(
-        RewardsDistributor _rewardsDistributor,
-        address _ve,
-        address _pearl
-    ) {
+    constructor(RewardsDistributor _rewardsDistributor, address _ve, address _pearl) {
         pearl = IPearl(_pearl);
         ve = IVotingEscrow(_ve);
         rewardsDistributor = _rewardsDistributor;
@@ -56,10 +53,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         _;
     }
 
-    function mintNFT(
-        uint256 amount,
-        uint256 duration
-    ) public createActor countCall("mint") {
+    function mintNFT(uint256 amount, uint256 duration) public createActor countCall("mint") {
         if (ids[currentActor] == 0) {
             ghost_actualMint++;
             amount = bound(amount, 0, type(uint8).max);
@@ -74,12 +68,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
                 pearl.approve(address(ve), amount);
 
                 (bool success0, bytes memory data) = address(ve).call(
-                    abi.encodeWithSignature(
-                        "mint(address,uint256,uint256)",
-                        currentActor,
-                        amount,
-                        duration
-                    )
+                    abi.encodeWithSignature("mint(address,uint256,uint256)", currentActor, amount, duration)
                 );
 
                 assert(success0);
@@ -87,7 +76,9 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
                 ids[currentActor] = id;
                 vm.stopPrank();
-            } else ghost_zeroMint++;
+            } else {
+                ghost_zeroMint++;
+            }
         }
     }
 
@@ -99,10 +90,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
             vm.warp(block.timestamp + 7 hours);
 
-            if (
-                rewardsDistributor._currentEpochTimestamp() >
-                rewardsDistributor.lastRewardEpochTimestamp()
-            ) {
+            if (rewardsDistributor._currentEpochTimestamp() > rewardsDistributor.lastRewardEpochTimestamp()) {
                 rewardsDistributor.notifyRewardAmount(amount);
             } else {}
 
@@ -110,25 +98,20 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         } else {}
     }
 
-    function claim(
-        uint256 actorSeed
-    ) public useActor(actorSeed) countCall("claim") {
+    function claim(uint256 actorSeed) public useActor(actorSeed) countCall("claim") {
         address claimer = _actors.rand(actorSeed);
         uint256 tokenId = ids[claimer];
         if (rewardsDistributor.claimable(tokenId) != 0) {
-            if (
-                rewardsDistributor.claimable(tokenId) <=
-                pearl.balanceOf(address(this))
-            ) {
+            if (rewardsDistributor.claimable(tokenId) <= pearl.balanceOf(address(this))) {
                 rewardsDistributor.claim(tokenId);
             }
         }
     }
 
-    function reduceActors(
-        uint256 acc,
-        function(uint256, address) external returns (uint256) func
-    ) public returns (uint256) {
+    function reduceActors(uint256 acc, function(uint256, address) external returns (uint256) func)
+        public
+        returns (uint256)
+    {
         return _actors.reduce(acc, func);
     }
 
@@ -160,9 +143,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
     function __mint(address addr, uint256 amount) internal {
         vm.startPrank(address(11));
-        (bool success, ) = address(pearl).call(
-            abi.encodeWithSignature("mint(address,uint256)", addr, amount)
-        );
+        (bool success,) = address(pearl).call(abi.encodeWithSignature("mint(address,uint256)", addr, amount));
         assert(success);
         vm.stopPrank();
     }

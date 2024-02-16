@@ -47,9 +47,11 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     using VirtualTick for mapping(int24 => VirtualTick.Info);
     using TickBitmap for mapping(int16 => uint256);
 
-    /************************************************
+    /**
+     *
      *  NON UPGRADEABLE STORAGE
-     ***********************************************/
+     *
+     */
 
     // accumulated rebalance in token0/token1 units
     struct FeeAmount {
@@ -113,35 +115,23 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     mapping(address => uint256) public stakedBalance;
 
     //private staked owner data
-    mapping(address owner => mapping(uint256 index => uint256))
-        private _ownedTokens;
+    mapping(address owner => mapping(uint256 index => uint256)) private _ownedTokens;
     mapping(uint256 tokenId => uint256) private _ownedTokensIndex;
 
-    /************************************************
+    /**
+     *
      *  EVENTS
-     ***********************************************/
+     *
+     */
 
     event Deposit(address indexed user, uint256 tokenId, uint128 liquidity);
     event Withdraw(address indexed user, uint256 tokenId, uint128 liquidity);
 
-    event IncreaseLiquidity(
-        address indexed user,
-        uint256 tokenId,
-        uint128 liquidity
-    );
+    event IncreaseLiquidity(address indexed user, uint256 tokenId, uint128 liquidity);
 
-    event DecreaseLiquidity(
-        address indexed user,
-        uint256 tokenId,
-        uint128 liquidity
-    );
+    event DecreaseLiquidity(address indexed user, uint256 tokenId, uint128 liquidity);
 
-    event Collect(
-        address indexed user,
-        uint256 tokenId,
-        address recipient,
-        uint256 rewardsOwed
-    );
+    event Collect(address indexed user, uint256 tokenId, address recipient, uint256 rewardsOwed);
 
     event RewardAdded(uint256 reward, uint256 residueAmount);
     event ClaimFees(address indexed from, uint256 claimed0, uint256 claimed1);
@@ -166,18 +156,14 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         isForPair = _isForPair;
         factory = IPearlV2Factory(_factory);
         pool = IPearlV2Pool(_pool);
-        nonfungiblePositionManager = INonfungiblePositionManager(
-            _nonfungiblePositionManager
-        );
+        nonfungiblePositionManager = INonfungiblePositionManager(_nonfungiblePositionManager);
         rewardToken = IERC20Upgradeable(_rewardToken);
 
         DISTRIBUTION = _distribution; // distro address (voter)
         internal_bribe = _internal_bribe; // lp fees goes here
 
         tickSpacing = pool.tickSpacing();
-        maxLiquidityPerTick = VirtualTick.tickSpacingToMaxLiquidityPerTick(
-            tickSpacing
-        );
+        maxLiquidityPerTick = VirtualTick.tickSpacingToMaxLiquidityPerTick(tickSpacing);
     }
 
     //=======================  MODIFIERS  =========================================
@@ -191,11 +177,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     /// @notice Checks whether an address is staker or not
     modifier onlyStaker(address owner, uint256 tokenId) {
         StakePosition.Info memory stakeInfo = stakepos.get(owner, tokenId);
-        require(
-            nonfungiblePositionManager.ownerOf(tokenId) == address(this) &&
-                stakeInfo.owner == owner,
-            "staker"
-        );
+        require(nonfungiblePositionManager.ownerOf(tokenId) == address(this) && stakeInfo.owner == owner, "staker");
         _;
     }
 
@@ -225,48 +207,32 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     /// @inheritdoc IGaugeV2
     function deposit(uint256 tokenId) external nonReentrant {
         // transfer NFT
-        nonfungiblePositionManager.safeTransferFrom(
-            msg.sender,
-            address(this),
-            tokenId,
-            ""
-        );
+        nonfungiblePositionManager.safeTransferFrom(msg.sender, address(this), tokenId, "");
         //check onERC721Received for furhter logic
     }
 
     /// @notice Upon receiving a Pearl V2 ERC721, creates the token deposit setting owner to `from`. Also stakes token
     /// in one or more incentives if properly formatted `data` has a length > 0.
     /// @inheritdoc IERC721Receiver
-    function onERC721Received(
-        address,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) external override pullNFTFee(tokenId) returns (bytes4) {
+    function onERC721Received(address, address from, uint256 tokenId, bytes calldata data)
+        external
+        override
+        pullNFTFee(tokenId)
+        returns (bytes4)
+    {
         require(msg.sender == address(nonfungiblePositionManager), "NP");
 
         NFTPositionInfo memory info = _getPositionInfo(tokenId);
         require(info.liquidity != 0, "liquidity");
 
-        _deposit(
-            from,
-            tokenId,
-            info.tickLower,
-            info.tickUpper,
-            info.tick,
-            info.liquidity
-        );
+        _deposit(from, tokenId, info.tickLower, info.tickUpper, info.tick, info.liquidity);
 
         emit Deposit(from, tokenId, info.liquidity);
         return this.onERC721Received.selector;
     }
 
     /// @inheritdoc IGaugeV2
-    function withdraw(
-        uint256 tokenId,
-        address to,
-        bytes memory data
-    )
+    function withdraw(uint256 tokenId, address to, bytes memory data)
         external
         nonReentrant
         onlyStaker(msg.sender, tokenId)
@@ -276,21 +242,9 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         require(to != address(0) && to != address(this));
         NFTPositionInfo memory info = _getPositionInfo(tokenId);
 
-        rewardsOwed = _withdraw(
-            msg.sender,
-            tokenId,
-            info.tickLower,
-            info.tickUpper,
-            info.tick,
-            info.liquidity
-        );
+        rewardsOwed = _withdraw(msg.sender, tokenId, info.tickLower, info.tickUpper, info.tick, info.liquidity);
 
-        nonfungiblePositionManager.safeTransferFrom(
-            address(this),
-            to,
-            tokenId,
-            data
-        );
+        nonfungiblePositionManager.safeTransferFrom(address(this), to, tokenId, data);
 
         emit Withdraw(msg.sender, tokenId, info.liquidity);
     }
@@ -298,52 +252,24 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     /// @notice Increase the position liquidity
     /// @dev user can increase the liquidity using token ID
     /// @inheritdoc IGaugeV2
-    function increaseLiquidity(
-        INonfungiblePositionManager.IncreaseLiquidityParams calldata params
-    )
+    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
         external
         nonReentrant
         onlyStaker(msg.sender, params.tokenId)
         pullNFTFee(params.tokenId)
     {
-        (
-            ,
-            ,
-            address token0,
-            address token1,
-            ,
-            ,
-            ,
-            uint128 liquidityBefore,
-            ,
-            ,
-            ,
-
-        ) = nonfungiblePositionManager.positions(params.tokenId);
+        (,, address token0, address token1,,,, uint128 liquidityBefore,,,,) =
+            nonfungiblePositionManager.positions(params.tokenId);
 
         //transfer tokens for the nonfungiblePositionManager's pearlV2MintCallback
         if (params.amount0Desired > 0) {
-            IERC20Upgradeable(token0).approve(
-                address(nonfungiblePositionManager),
-                params.amount0Desired
-            );
-            IERC20Upgradeable(token0).safeTransferFrom(
-                msg.sender,
-                address(this),
-                params.amount0Desired
-            );
+            IERC20Upgradeable(token0).approve(address(nonfungiblePositionManager), params.amount0Desired);
+            IERC20Upgradeable(token0).safeTransferFrom(msg.sender, address(this), params.amount0Desired);
         }
 
         if (params.amount1Desired > 0) {
-            IERC20Upgradeable(token1).approve(
-                address(nonfungiblePositionManager),
-                params.amount1Desired
-            );
-            IERC20Upgradeable(token1).safeTransferFrom(
-                msg.sender,
-                address(this),
-                params.amount1Desired
-            );
+            IERC20Upgradeable(token1).approve(address(nonfungiblePositionManager), params.amount1Desired);
+            IERC20Upgradeable(token1).safeTransferFrom(msg.sender, address(this), params.amount1Desired);
         }
 
         nonfungiblePositionManager.increaseLiquidity(params);
@@ -353,13 +279,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         uint128 netLiquidity = nftInfo.liquidity - liquidityBefore;
 
         //collect reward
-        _collectReward(
-            params.tokenId,
-            msg.sender,
-            nftInfo.tickLower,
-            nftInfo.tickUpper,
-            false
-        );
+        _collectReward(params.tokenId, msg.sender, nftInfo.tickLower, nftInfo.tickUpper, false);
 
         _updatePoolPosition(
             msg.sender,
@@ -376,9 +296,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     /// @notice Decrease the position liquidity
     /// @dev user can increase or decrease the liquidity using token ID
     /// @inheritdoc IGaugeV2
-    function decreaseLiquidity(
-        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
-    )
+    function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
         external
         nonReentrant
         onlyStaker(msg.sender, params.tokenId)
@@ -387,13 +305,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         nonfungiblePositionManager.decreaseLiquidity(params);
         NFTPositionInfo memory nftInfo = _getPositionInfo(params.tokenId);
 
-        _collectReward(
-            params.tokenId,
-            msg.sender,
-            nftInfo.tickLower,
-            nftInfo.tickUpper,
-            false
-        );
+        _collectReward(params.tokenId, msg.sender, nftInfo.tickLower, nftInfo.tickUpper, false);
 
         _updatePoolPosition(
             msg.sender,
@@ -420,52 +332,39 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     // ====== ALM ERC20 ========
 
     /// @inheritdoc IGaugeV2
-    function notifyERC20Deposit(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidityDelta
-    ) external override nonReentrant isGaugeAlm {
+    function notifyERC20Deposit(int24 tickLower, int24 tickUpper, uint128 liquidityDelta)
+        external
+        override
+        nonReentrant
+        isGaugeAlm
+    {
         require(liquidityDelta > 0, "LQ");
-        (, int24 tick, , , , , ) = pool.slot0();
+        (, int24 tick,,,,,) = pool.slot0();
 
-        _deposit(
-            msg.sender,
-            ALM_TOKENID,
-            tickLower,
-            tickUpper,
-            tick,
-            liquidityDelta
-        );
+        _deposit(msg.sender, ALM_TOKENID, tickLower, tickUpper, tick, liquidityDelta);
 
         emit IncreaseLiquidity(msg.sender, ALM_TOKENID, liquidityDelta);
     }
 
     /// @inheritdoc IGaugeV2
-    function notifyERC20Withdraw(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidityDelta
-    ) external override nonReentrant isGaugeAlm returns (uint256 rewardsOwed) {
+    function notifyERC20Withdraw(int24 tickLower, int24 tickUpper, uint128 liquidityDelta)
+        external
+        override
+        nonReentrant
+        isGaugeAlm
+        returns (uint256 rewardsOwed)
+    {
         require(liquidityDelta > 0, "LQ");
-        (, int24 tick, , , , , ) = pool.slot0();
+        (, int24 tick,,,,,) = pool.slot0();
 
-        rewardsOwed = _withdraw(
-            msg.sender,
-            ALM_TOKENID,
-            tickLower,
-            tickUpper,
-            tick,
-            liquidityDelta
-        );
+        rewardsOwed = _withdraw(msg.sender, ALM_TOKENID, tickLower, tickUpper, tick, liquidityDelta);
 
         emit DecreaseLiquidity(msg.sender, ALM_TOKENID, liquidityDelta);
     }
 
     /// @notice collect emision for token ID
     /// @inheritdoc IGaugeV2
-    function collectReward(
-        uint256 tokenId
-    )
+    function collectReward(uint256 tokenId)
         external
         nonReentrant
         onlyStaker(msg.sender, tokenId)
@@ -473,38 +372,25 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         returns (uint256 rewardsOwed)
     {
         NFTPositionInfo memory nftInfo = _getPositionInfo(tokenId);
-        rewardsOwed = _collectReward(
-            tokenId,
-            msg.sender,
-            nftInfo.tickLower,
-            nftInfo.tickUpper,
-            true
-        );
+        rewardsOwed = _collectReward(tokenId, msg.sender, nftInfo.tickLower, nftInfo.tickUpper, true);
         emit Collect(msg.sender, tokenId, msg.sender, rewardsOwed);
     }
 
     /// @notice collect emision for alm gauge
-    function collectRewardForALM(
-        int24 tickLower,
-        int24 tickUpper
-    ) external nonReentrant isGaugeAlm returns (uint256 rewardsOwed) {
-        rewardsOwed = _collectReward(
-            ALM_TOKENID,
-            msg.sender,
-            tickLower,
-            tickUpper,
-            true
-        );
+    function collectRewardForALM(int24 tickLower, int24 tickUpper)
+        external
+        nonReentrant
+        isGaugeAlm
+        returns (uint256 rewardsOwed)
+    {
+        rewardsOwed = _collectReward(ALM_TOKENID, msg.sender, tickLower, tickUpper, true);
         emit Collect(msg.sender, ALM_TOKENID, msg.sender, rewardsOwed);
     }
 
     /// @notice Transitions to next tick when notified from the pool
     /// @dev The set of active ticks in the gauge must be a subset of the active ticks in the real pool
     /// @inheritdoc IGaugeV2
-    function crossTo(
-        int24 targetTick,
-        bool zeroForOne
-    ) external nonReentrant returns (bool) {
+    function crossTo(int24 targetTick, bool zeroForOne) external nonReentrant returns (bool) {
         require(address(pool) == msg.sender, "pool");
         _distributeRewards();
 
@@ -515,22 +401,16 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         uint128 _liquidity = gaugeLiquidity;
         uint256 _rewardsGrowthGlobalX128 = rewardsGrowthGlobalX128;
 
-        bool isTrue = zeroForOne
-            ? _globalTick != TickMath.MIN_TICK
-            : _globalTick != TickMath.MAX_TICK - 1;
+        bool isTrue = zeroForOne ? _globalTick != TickMath.MIN_TICK : _globalTick != TickMath.MAX_TICK - 1;
 
         // // The set of active ticks in the gauge must be a subset of the active ticks in the pool
         // // so this loop will cross no more ticks than the pool
         while (isTrue) {
-            (tickNext, initialized) = tickBitmap
-                .nextInitializedTickWithinOneWord(
-                    _globalTick,
-                    tickSpacing,
-                    zeroForOne
-                );
+            (tickNext, initialized) = tickBitmap.nextInitializedTickWithinOneWord(_globalTick, tickSpacing, zeroForOne);
 
-            if ((zeroForOne ? targetTick >= tickNext : targetTick < tickNext))
+            if ((zeroForOne ? targetTick >= tickNext : targetTick < tickNext)) {
                 break;
+            }
             // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
             if (tickNext < TickMath.MIN_TICK) {
                 tickNext = TickMath.MIN_TICK;
@@ -540,10 +420,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
 
             // if the tick is initialized, run the tick transition
             if (initialized) {
-                int128 liquidityNet = ticks.cross(
-                    tickNext,
-                    _rewardsGrowthGlobalX128
-                );
+                int128 liquidityNet = ticks.cross(tickNext, _rewardsGrowthGlobalX128);
 
                 // if we're moving leftward, we interpret liquidityNet as the opposite sign
                 // safe because liquidityNet cannot be type(int128).min
@@ -551,9 +428,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
                     if (zeroForOne) liquidityNet = -liquidityNet;
                 }
 
-                _liquidity = liquidityNet < 0
-                    ? _liquidity - uint128(-liquidityNet)
-                    : _liquidity + uint128(liquidityNet);
+                _liquidity = liquidityNet < 0 ? _liquidity - uint128(-liquidityNet) : _liquidity + uint128(liquidityNet);
             }
 
             unchecked {
@@ -569,10 +444,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
     /// @notice notify the reward amount
     /// @dev Receive rewards from distribution and update reward rate
     /// @inheritdoc IGaugeV2
-    function notifyRewardAmount(
-        address token,
-        uint256 reward
-    ) external nonReentrant {
+    function notifyRewardAmount(address token, uint256 reward) external nonReentrant {
         require(msg.sender == DISTRIBUTION);
         require(token == address(rewardToken));
 
@@ -604,11 +476,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         // very high values of rewardRate in the earned and rewardsPerToken functions;
         // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
         uint256 balance = rewardToken.balanceOf(address(this));
-        require(
-            rewardsInfo.rewardRate <=
-                FullMath.mulDiv(balance, PRECISION, epoch),
-            "Provided reward too high"
-        );
+        require(rewardsInfo.rewardRate <= FullMath.mulDiv(balance, PRECISION, epoch), "Provided reward too high");
 
         //reset the disbursed amount to zero
         rewardsInfo.disbursed = 0;
@@ -673,24 +541,15 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         int24 tick,
         uint128 liquidityDelta
     ) internal {
-        StakePosition.Info storage stake = _updatePoolPosition(
-            owner,
-            tokenId,
-            tickLower,
-            tickUpper,
-            tick,
-            int128(liquidityDelta)
-        );
+        StakePosition.Info storage stake =
+            _updatePoolPosition(owner, tokenId, tickLower, tickUpper, tick, int128(liquidityDelta));
 
         // if liquidity was ZERO update stake position and user token mappings
         // skip increase liquidity from gaugeALM
         if (stake.liquidity == liquidityDelta) {
             //update ownership
             stake.owner = owner;
-            stake.rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(
-                tickLower,
-                tickUpper
-            );
+            stake.rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(tickLower, tickUpper);
 
             //Update user nft mappings
             stakedBalance[owner] += 1;
@@ -707,23 +566,11 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         uint128 liquidityDelta
     ) internal returns (uint256 rewardsOwed) {
         //collect reward
-        rewardsOwed = _collectReward(
-            tokenId,
-            owner,
-            tickLower,
-            tickUpper,
-            true
-        );
+        rewardsOwed = _collectReward(tokenId, owner, tickLower, tickUpper, true);
 
         //zero update for reward collection
-        StakePosition.Info storage stake = _updatePoolPosition(
-            owner,
-            tokenId,
-            tickLower,
-            tickUpper,
-            tick,
-            -int128(liquidityDelta)
-        );
+        StakePosition.Info storage stake =
+            _updatePoolPosition(owner, tokenId, tickLower, tickUpper, tick, -int128(liquidityDelta));
 
         //update stake position and user token mappings
         if (stake.liquidity == 0) {
@@ -735,25 +582,11 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         }
     }
 
-    function _getPositionInfo(
-        uint256 tokenId
-    ) internal view returns (NFTPositionInfo memory info) {
-        (
-            ,
-            ,
-            info.token0,
-            info.token1,
-            info.fee,
-            info.tickLower,
-            info.tickUpper,
-            info.liquidity,
-            ,
-            ,
-            ,
-
-        ) = nonfungiblePositionManager.positions(tokenId);
+    function _getPositionInfo(uint256 tokenId) internal view returns (NFTPositionInfo memory info) {
+        (,, info.token0, info.token1, info.fee, info.tickLower, info.tickUpper, info.liquidity,,,,) =
+            nonfungiblePositionManager.positions(tokenId);
         info.pool = factory.getPool(info.token0, info.token1, info.fee);
-        (, info.tick, , , , , ) = pool.slot0();
+        (, info.tick,,,,,) = pool.slot0();
         require(info.pool == address(pool));
     }
 
@@ -779,23 +612,11 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         _distributeRewards();
 
         if (liquidityDelta != 0) {
-            flippedLower = ticks.update(
-                tickLower,
-                tick,
-                liquidityDelta,
-                rewardsGrowthGlobalX128,
-                false,
-                maxLiquidityPerTick
-            );
+            flippedLower =
+                ticks.update(tickLower, tick, liquidityDelta, rewardsGrowthGlobalX128, false, maxLiquidityPerTick);
 
-            flippedUpper = ticks.update(
-                tickUpper,
-                tick,
-                liquidityDelta,
-                rewardsGrowthGlobalX128,
-                true,
-                maxLiquidityPerTick
-            );
+            flippedUpper =
+                ticks.update(tickUpper, tick, liquidityDelta, rewardsGrowthGlobalX128, true, maxLiquidityPerTick);
 
             if (flippedLower) {
                 tickBitmap.flipTick(tickLower, tickSpacing);
@@ -828,61 +649,38 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         stake.update(liquidityDelta);
     }
 
-    function _getInnerRewardGrowth(
-        int24 tickLower,
-        int24 tickUpper
-    ) internal view returns (uint256 rewardsGrowthInsideLastX128) {
+    function _getInnerRewardGrowth(int24 tickLower, int24 tickUpper)
+        internal
+        view
+        returns (uint256 rewardsGrowthInsideLastX128)
+    {
         unchecked {
             RewardsInfo memory _info = rewardsInfo;
             uint256 _rewardsGrowthGlobalX128 = rewardsGrowthGlobalX128;
 
             //check if epoch period is finished
             if (_info.periodFinish > _info.lastUpdateTime) {
-                uint256 timeDelta = (
-                    (min256(block.timestamp, _info.periodFinish) -
-                        _info.lastUpdateTime)
-                );
+                uint256 timeDelta = ((min256(block.timestamp, _info.periodFinish) - _info.lastUpdateTime));
                 uint256 _liquidity = gaugeLiquidity;
                 if (timeDelta > 0 && _liquidity > 0) {
-                    uint256 rewards = FullMath.mulDiv(
-                        _info.rewardRate,
-                        timeDelta,
-                        PRECISION
-                    );
-                    _rewardsGrowthGlobalX128 += FullMath.mulDiv(
-                        rewards,
-                        FixedPoint128.Q128,
-                        _liquidity
-                    );
+                    uint256 rewards = FullMath.mulDiv(_info.rewardRate, timeDelta, PRECISION);
+                    _rewardsGrowthGlobalX128 += FullMath.mulDiv(rewards, FixedPoint128.Q128, _liquidity);
                 }
             }
 
-            rewardsGrowthInsideLastX128 = ticks.getrewardsGrowthInside(
-                tickLower,
-                tickUpper,
-                globalTick,
-                _rewardsGrowthGlobalX128
-            );
+            rewardsGrowthInsideLastX128 =
+                ticks.getrewardsGrowthInside(tickLower, tickUpper, globalTick, _rewardsGrowthGlobalX128);
         }
     }
 
-    function _getLatestReward(
-        int24 tickLower,
-        int24 tickUpper,
-        StakePosition.Info memory stake
-    )
+    function _getLatestReward(int24 tickLower, int24 tickUpper, StakePosition.Info memory stake)
         internal
         view
         returns (uint256 reward, uint256 rewardsGrowthInsideLastX128)
     {
-        rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(
-            tickLower,
-            tickUpper
-        );
+        rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(tickLower, tickUpper);
         reward = FullMath.mulDiv(
-            rewardsGrowthInsideLastX128 - stake.rewardsGrowthInsideLastX128,
-            stake.liquidity,
-            FixedPoint128.Q128
+            rewardsGrowthInsideLastX128 - stake.rewardsGrowthInsideLastX128, stake.liquidity, FixedPoint128.Q128
         );
     }
 
@@ -905,25 +703,15 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         RewardsInfo memory _info = rewardsInfo;
         if (_info.periodFinish < _info.lastUpdateTime) return; // no distribution after epoch end
 
-        uint256 timeDelta = (
-            (min256(block.timestamp, _info.periodFinish) - _info.lastUpdateTime)
-        );
+        uint256 timeDelta = ((min256(block.timestamp, _info.periodFinish) - _info.lastUpdateTime));
 
         if (timeDelta == 0) return; // only once per block
 
         uint256 _liquidity = gaugeLiquidity;
-        uint256 rewards = FullMath.mulDiv(
-            _info.rewardRate,
-            timeDelta,
-            PRECISION
-        );
+        uint256 rewards = FullMath.mulDiv(_info.rewardRate, timeDelta, PRECISION);
 
         if (_liquidity > 0) {
-            rewardsGrowthGlobalX128 += FullMath.mulDiv(
-                rewards,
-                FixedPoint128.Q128,
-                gaugeLiquidity
-            );
+            rewardsGrowthGlobalX128 += FullMath.mulDiv(rewards, FixedPoint128.Q128, gaugeLiquidity);
         } else {
             rewardsInfo.liquidity0rewards += rewards;
         }
@@ -931,21 +719,14 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
         rewardsInfo.lastUpdateTime = block.timestamp;
     }
 
-    function _collectReward(
-        uint256 tokenId,
-        address owner,
-        int24 tickLower,
-        int24 tickUpper,
-        bool isTransfer
-    ) internal returns (uint256 rewardsOwed) {
+    function _collectReward(uint256 tokenId, address owner, int24 tickLower, int24 tickUpper, bool isTransfer)
+        internal
+        returns (uint256 rewardsOwed)
+    {
         _distributeRewards();
         StakePosition.Info memory stakeInfo = stakepos.get(owner, tokenId);
         uint256 rewardsGrowthInsideLastX128;
-        (rewardsOwed, rewardsGrowthInsideLastX128) = _getLatestReward(
-            tickLower,
-            tickUpper,
-            stakeInfo
-        );
+        (rewardsOwed, rewardsGrowthInsideLastX128) = _getLatestReward(tickLower, tickUpper, stakeInfo);
 
         StakePosition.Info storage stake = stakepos.get(msg.sender, tokenId);
 
@@ -1004,19 +785,12 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
      * @param tokenId nft tokenId of the owner
      * @return amount amount of claimable reward in reward token
      */
-    function getReward(
-        address owner,
-        uint256 tokenId
-    ) public view returns (uint256 amount) {
+    function getReward(address owner, uint256 tokenId) public view returns (uint256 amount) {
         StakePosition.Info memory stake = stakepos.get(owner, tokenId);
         amount = stake.rewardsOwed;
         if (stake.liquidity != 0) {
             NFTPositionInfo memory nftInfo = _getPositionInfo(tokenId);
-            (uint256 rewardsOwed, ) = _getLatestReward(
-                nftInfo.tickLower,
-                nftInfo.tickUpper,
-                stake
-            );
+            (uint256 rewardsOwed,) = _getLatestReward(nftInfo.tickLower, nftInfo.tickUpper, stake);
             amount += rewardsOwed;
         }
     }
@@ -1027,18 +801,11 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
      * @param tickUpper upper range of the tick
      * @return amount amount of claimable reward in reward token
      */
-    function getRewardForALM(
-        int24 tickLower,
-        int24 tickUpper
-    ) external view returns (uint256 amount) {
+    function getRewardForALM(int24 tickLower, int24 tickUpper) external view returns (uint256 amount) {
         StakePosition.Info memory stake = stakepos.get(gaugeAlm, ALM_TOKENID);
         amount = stake.rewardsOwed;
         if (stake.liquidity != 0) {
-            (uint256 rewardsOwed, ) = _getLatestReward(
-                tickLower,
-                tickUpper,
-                stake
-            );
+            (uint256 rewardsOwed,) = _getLatestReward(tickLower, tickUpper, stake);
             amount += rewardsOwed;
         }
     }
@@ -1058,10 +825,7 @@ contract GaugeV2 is IGaugeV2, ReentrancyGuardUpgradeable, OwnableUpgradeable {
      * @param idx index opf the _ownedTokens mappings
      * @return tokenId tokenId mapped on the give index to repsective owner
      */
-    function tokenOfOwnerByIndex(
-        address owner,
-        uint256 idx
-    ) external view returns (uint256) {
+    function tokenOfOwnerByIndex(address owner, uint256 idx) external view returns (uint256) {
         if (idx >= balanceOf(owner)) {
             revert("NA");
         }

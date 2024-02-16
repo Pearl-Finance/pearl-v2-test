@@ -150,12 +150,10 @@ contract PairAPI is Initializable {
     event Owner(address oldOwner, address newOwner);
     event Voter(address oldVoter, address newVoter);
 
-    function initialize(
-        address _voter,
-        address _posManager,
-        address _liquidBoxManager,
-        address _factoryV1
-    ) public initializer {
+    function initialize(address _voter, address _posManager, address _liquidBoxManager, address _factoryV1)
+        public
+        initializer
+    {
         owner = msg.sender;
 
         voter = IVoter(_voter);
@@ -166,11 +164,11 @@ contract PairAPI is Initializable {
         underlyingToken = address(IVotingEscrow(voter._ve()).lockedToken());
     }
 
-    function getAllPair(
-        address _user,
-        uint256 _amounts,
-        uint256 _offset
-    ) external view returns (pairInfo[] memory Pairs) {
+    function getAllPair(address _user, uint256 _amounts, uint256 _offset)
+        external
+        view
+        returns (pairInfo[] memory Pairs)
+    {
         require(_amounts <= MAX_PAIRS, "too many pair");
 
         Pairs = new pairInfo[](_amounts);
@@ -200,21 +198,18 @@ contract PairAPI is Initializable {
         }
     }
 
-    function getPair(
-        address _pair,
-        address _account,
-        uint8 _version
-    ) external view returns (pairInfo memory _pairInfo) {
+    function getPair(address _pair, address _account, uint8 _version)
+        external
+        view
+        returns (pairInfo memory _pairInfo)
+    {
         if (_version == uint8(Version.V2)) {
             return _pairAddressToInfoV2(_pair, _account);
         }
         return _pairAddressToInfoV3(_pair, _account);
     }
 
-    function _pairAddressToInfoV2(
-        address _pair,
-        address _account
-    ) internal view returns (pairInfo memory _pairInfo) {
+    function _pairAddressToInfoV2(address _pair, address _account) internal view returns (pairInfo memory _pairInfo) {
         IPearlV1Pool ipair = IPearlV1Pool(_pair);
         address token_0;
         address token_1;
@@ -225,15 +220,12 @@ contract PairAPI is Initializable {
 
         token_0 = ipair.token0();
         token_1 = ipair.token1();
-        (r0, r1, ) = ipair.getReserves();
+        (r0, r1,) = ipair.getReserves();
 
         _pairInfo.pair_address = _pair;
         _pairInfo.symbol = string(
             abi.encodePacked(
-                "aMM-",
-                IERC20MetadataUpgradeable(token_0).symbol(),
-                "/",
-                IERC20MetadataUpgradeable(token_1).symbol()
+                "aMM-", IERC20MetadataUpgradeable(token_0).symbol(), "/", IERC20MetadataUpgradeable(token_1).symbol()
             )
         );
         _pairInfo.decimals = ipair.decimals();
@@ -243,50 +235,31 @@ contract PairAPI is Initializable {
 
         // Token0 Info
         _pairInfo.token0 = token_0;
-        _pairInfo.token0_decimals = IERC20MetadataUpgradeable(token_0)
-            .decimals();
+        _pairInfo.token0_decimals = IERC20MetadataUpgradeable(token_0).decimals();
         _pairInfo.token0_symbol = IERC20MetadataUpgradeable(token_0).symbol();
-        _pairInfo.total_supply0 = IERC20MetadataUpgradeable(token_0).balanceOf(
-            _pair
-        );
+        _pairInfo.total_supply0 = IERC20MetadataUpgradeable(token_0).balanceOf(_pair);
         // _pairInfo.reserve0 = r0;
 
         // Token1 Info
         _pairInfo.token1 = token_1;
-        _pairInfo.token1_decimals = IERC20MetadataUpgradeable(token_1)
-            .decimals();
+        _pairInfo.token1_decimals = IERC20MetadataUpgradeable(token_1).decimals();
         _pairInfo.token1_symbol = IERC20MetadataUpgradeable(token_1).symbol();
-        _pairInfo.total_supply1 = IERC20MetadataUpgradeable(token_1).balanceOf(
-            _pair
-        );
+        _pairInfo.total_supply1 = IERC20MetadataUpgradeable(token_1).balanceOf(_pair);
         // _pairInfo.reserve1 = r1;
 
         // Account Info
-        _pairInfo.account_lp_balance = IERC20Upgradeable(_pair).balanceOf(
-            _account
-        );
-        _pairInfo.account_token0_balance = IERC20Upgradeable(token_0).balanceOf(
-            _account
-        );
-        _pairInfo.account_token1_balance = IERC20Upgradeable(token_1).balanceOf(
-            _account
-        );
+        _pairInfo.account_lp_balance = IERC20Upgradeable(_pair).balanceOf(_account);
+        _pairInfo.account_token0_balance = IERC20Upgradeable(token_0).balanceOf(_account);
+        _pairInfo.account_token1_balance = IERC20Upgradeable(token_1).balanceOf(_account);
 
         if (_pairInfo.total_supply != 0) {
-            _pairInfo.account_lp_amount0 =
-                (r0 * _pairInfo.account_lp_balance) /
-                _pairInfo.total_supply;
+            _pairInfo.account_lp_amount0 = (r0 * _pairInfo.account_lp_balance) / _pairInfo.total_supply;
 
-            _pairInfo.account_lp_amount1 =
-                (r1 * _pairInfo.account_lp_balance) /
-                _pairInfo.total_supply;
+            _pairInfo.account_lp_amount1 = (r1 * _pairInfo.account_lp_balance) / _pairInfo.total_supply;
         }
     }
 
-    function _pairAddressToInfoV3(
-        address _pair,
-        address _account
-    ) internal view returns (pairInfo memory _pairInfo) {
+    function _pairAddressToInfoV3(address _pair, address _account) internal view returns (pairInfo memory _pairInfo) {
         IPearlV2Pool ipair = IPearlV2Pool(_pair);
         address token_0;
         address token_1;
@@ -312,31 +285,17 @@ contract PairAPI is Initializable {
 
                 _pairInfo.gauge = address(_gauge);
                 _pairInfo.gauge_alm = address(_gaugeAlm);
-                (, , emissions, , , , ) = _gauge.rewardsInfo();
-                (
-                    _pairInfo.gauge_fee_claimable0,
-                    _pairInfo.gauge_fee_claimable1
-                ) = _gauge.feeAmount();
+                (,, emissions,,,,) = _gauge.rewardsInfo();
+                (_pairInfo.gauge_fee_claimable0, _pairInfo.gauge_fee_claimable1) = _gauge.feeAmount();
 
-                if (
-                    address(_gaugeAlm) != address(0) &&
-                    _gaugeAlm.balanceOf(_account) > 0
-                ) {
+                if (address(_gaugeAlm) != address(0) && _gaugeAlm.balanceOf(_account) > 0) {
                     gaugeAlmTotalSupply = _gaugeAlm.totalSupply();
-                    _pairInfo.account_lp_alm_staked = _gaugeAlm.balanceOf(
-                        _account
-                    );
-                    (
-                        _pairInfo.account_lp_alm_staked_amount0,
-                        _pairInfo.account_lp_alm_staked_amount1,
+                    _pairInfo.account_lp_alm_staked = _gaugeAlm.balanceOf(_account);
+                    (_pairInfo.account_lp_alm_staked_amount0, _pairInfo.account_lp_alm_staked_amount1,) =
+                        _gaugeAlm.getStakedAmounts(_account);
+                    _pairInfo.account_lp_alm_earned = _gaugeAlm.earnedReward(_account);
 
-                    ) = _gaugeAlm.getStakedAmounts(_account);
-                    _pairInfo.account_lp_alm_earned = _gaugeAlm.earnedReward(
-                        _account
-                    );
-
-                    (uint256 claimable0, uint256 claimable1) = _gaugeAlm
-                        .earnedFees();
+                    (uint256 claimable0, uint256 claimable1) = _gaugeAlm.earnedFees();
                     _pairInfo.gauge_fee_claimable0 += claimable0;
                     _pairInfo.gauge_fee_claimable1 += claimable1;
                 }
@@ -347,10 +306,7 @@ contract PairAPI is Initializable {
         _pairInfo.pair_address = _pair;
         _pairInfo.symbol = string(
             abi.encodePacked(
-                "aMM-",
-                IERC20MetadataUpgradeable(token_0).symbol(),
-                "/",
-                IERC20MetadataUpgradeable(token_1).symbol()
+                "aMM-", IERC20MetadataUpgradeable(token_0).symbol(), "/", IERC20MetadataUpgradeable(token_1).symbol()
             )
         );
         _pairInfo.name = _pairInfo.symbol;
@@ -362,23 +318,17 @@ contract PairAPI is Initializable {
         _pairInfo = _positionInfo(_pairInfo, _account, _pair, ipair, _gauge);
         // Token0 Info
         _pairInfo.token0 = token_0;
-        _pairInfo.token0_decimals = IERC20MetadataUpgradeable(token_0)
-            .decimals();
+        _pairInfo.token0_decimals = IERC20MetadataUpgradeable(token_0).decimals();
         _pairInfo.token0_symbol = IERC20MetadataUpgradeable(token_0).symbol();
-        _pairInfo.total_supply0 = IERC20MetadataUpgradeable(token_0).balanceOf(
-            _pair
-        );
+        _pairInfo.total_supply0 = IERC20MetadataUpgradeable(token_0).balanceOf(_pair);
         // _pairInfo.reserve0 = r0;
         // _pairInfo.tokenOwed = ipair.claimable0(_account);
 
         // Token1 Info
         _pairInfo.token1 = token_1;
-        _pairInfo.token1_decimals = IERC20MetadataUpgradeable(token_1)
-            .decimals();
+        _pairInfo.token1_decimals = IERC20MetadataUpgradeable(token_1).decimals();
         _pairInfo.token1_symbol = IERC20MetadataUpgradeable(token_1).symbol();
-        _pairInfo.total_supply1 = IERC20MetadataUpgradeable(token_1).balanceOf(
-            _pair
-        );
+        _pairInfo.total_supply1 = IERC20MetadataUpgradeable(token_1).balanceOf(_pair);
         // _pairInfo.reserve1 = r1;
         // _pairInfo.tokenOwed1 = ipair.claimable1(_account);
 
@@ -389,21 +339,15 @@ contract PairAPI is Initializable {
         _pairInfo.gauge_alm_total_supply = gaugeAlmTotalSupply;
         _pairInfo.emissions = emissions;
         _pairInfo.emissions_token = underlyingToken;
-        _pairInfo.emissions_token_decimals = IERC20MetadataUpgradeable(
-            underlyingToken
-        ).decimals();
+        _pairInfo.emissions_token_decimals = IERC20MetadataUpgradeable(underlyingToken).decimals();
 
         // external address
         _pairInfo.gauge_fee = voter.internal_bribes(address(_gauge));
         _pairInfo.bribe = voter.external_bribes(address(_gauge));
 
         // Account Info
-        _pairInfo.account_token0_balance = IERC20Upgradeable(token_0).balanceOf(
-            _account
-        );
-        _pairInfo.account_token1_balance = IERC20Upgradeable(token_1).balanceOf(
-            _account
-        );
+        _pairInfo.account_token0_balance = IERC20Upgradeable(token_0).balanceOf(_account);
+        _pairInfo.account_token1_balance = IERC20Upgradeable(token_1).balanceOf(_account);
         _pairInfo.account_gauge_balance = accountGaugeLPAmount;
     }
 
@@ -419,47 +363,30 @@ contract PairAPI is Initializable {
         nftParams.pairToken1 = ipair.token1();
         nftParams.pairFee = ipair.fee();
 
-        address box = lboxManager.getBox(
-            nftParams.pairToken0,
-            nftParams.pairToken1,
-            nftParams.pairFee
-        );
+        address box = lboxManager.getBox(nftParams.pairToken0, nftParams.pairToken1, nftParams.pairFee);
 
         _pairInfo.box_address = box;
         _pairInfo.box_manager_address = address(lboxManager);
 
         //Add liquidity,ticks and sqrtPriceX96
         _pairInfo.total_liquidity = IPearlV2Pool(_pair).liquidity();
-        (_pairInfo.sqrtPriceX96, _pairInfo.tick, , , , , ) = IPearlV2Pool(_pair)
-            .slot0();
+        (_pairInfo.sqrtPriceX96, _pairInfo.tick,,,,,) = IPearlV2Pool(_pair).slot0();
 
         if (box != address(0)) {
             _pairInfo.account_lp_alm = lboxManager.balanceOf(box, _account);
             if (_pairInfo.account_lp_alm > 0) {
-                (
-                    _pairInfo.account_lp_alm_claimable0,
-                    _pairInfo.account_lp_alm_claimable1
-                ) = lboxManager.getClaimableFees(box, _account);
+                (_pairInfo.account_lp_alm_claimable0, _pairInfo.account_lp_alm_claimable1) =
+                    lboxManager.getClaimableFees(box, _account);
             }
 
-            (_pairInfo.alm_lower, _pairInfo.alm_upper) = lboxManager.getLimits(
-                box
-            );
+            (_pairInfo.alm_lower, _pairInfo.alm_upper) = lboxManager.getLimits(box);
 
-            (
-                _pairInfo.alm_total_supply0,
-                _pairInfo.alm_total_supply1,
-                ,
-                ,
-                _pairInfo.alm_total_liquidity
-            ) = lboxManager.getTotalAmounts(box);
+            (_pairInfo.alm_total_supply0, _pairInfo.alm_total_supply1,,, _pairInfo.alm_total_liquidity) =
+                lboxManager.getTotalAmounts(box);
 
             //Account ALM amounts info
-            (
-                _pairInfo.account_lp_alm_amount0,
-                _pairInfo.account_lp_alm_amount1,
-
-            ) = lboxManager.getSharesAmount(box, _account);
+            (_pairInfo.account_lp_alm_amount0, _pairInfo.account_lp_alm_amount1,) =
+                lboxManager.getSharesAmount(box, _account);
 
             //Add ALM amounts to the total account lp amounts
             _pairInfo.account_lp_amount0 = _pairInfo.account_lp_alm_amount0;
@@ -467,9 +394,7 @@ contract PairAPI is Initializable {
         }
 
         //Get NFT liquidity info
-        uint256 totalNftInUserAccount = IERC721Enumerable(
-            address(positionManager)
-        ).balanceOf(_account);
+        uint256 totalNftInUserAccount = IERC721Enumerable(address(positionManager)).balanceOf(_account);
 
         uint256 totalNFT = totalNftInUserAccount;
         //Add staked nft tokenIds
@@ -483,38 +408,15 @@ contract PairAPI is Initializable {
             _pairInfo.account_positions = new positionInfo[](totalNFT);
             {
                 for (i = 0; i < totalNftInUserAccount; i++) {
-                    uint256 tokenId = IERC721Enumerable(
-                        address(positionManager)
-                    ).tokenOfOwnerByIndex(_account, i);
-                    (
-                        ,
-                        ,
-                        nftParams.token0,
-                        nftParams.token1,
-                        nftParams.fee,
-                        ,
-                        ,
-                        ,
-                        ,
-                        ,
-                        ,
-
-                    ) = positionManager.positions(tokenId);
+                    uint256 tokenId = IERC721Enumerable(address(positionManager)).tokenOfOwnerByIndex(_account, i);
+                    (,, nftParams.token0, nftParams.token1, nftParams.fee,,,,,,,) = positionManager.positions(tokenId);
                     if (
-                        nftParams.token0 == nftParams.pairToken0 &&
-                        nftParams.token1 == nftParams.pairToken1 &&
-                        nftParams.fee == nftParams.pairFee
+                        nftParams.token0 == nftParams.pairToken0 && nftParams.token1 == nftParams.pairToken1
+                            && nftParams.fee == nftParams.pairFee
                     ) {
-                        _pairInfo.account_positions[j] = _positions(
-                            tokenId,
-                            _pairInfo.sqrtPriceX96
-                        );
-                        _pairInfo.account_lp_amount0 += _pairInfo
-                            .account_positions[j]
-                            .amount0;
-                        _pairInfo.account_lp_amount1 += _pairInfo
-                            .account_positions[j]
-                            .amount1;
+                        _pairInfo.account_positions[j] = _positions(tokenId, _pairInfo.sqrtPriceX96);
+                        _pairInfo.account_lp_amount0 += _pairInfo.account_positions[j].amount0;
+                        _pairInfo.account_lp_amount1 += _pairInfo.account_positions[j].amount1;
                         j++;
                     }
                 }
@@ -525,25 +427,14 @@ contract PairAPI is Initializable {
                 if (address(_gauge) != address(0)) {
                     totalNFT = _gauge.balanceOf(_account);
                     for (i = 0; i < totalNFT; i++) {
-                        uint256 tokenId = _gauge.tokenOfOwnerByIndex(
-                            _account,
-                            i
-                        );
+                        uint256 tokenId = _gauge.tokenOfOwnerByIndex(_account, i);
 
-                        _pairInfo.account_positions[j] = _positions(
-                            tokenId,
-                            _pairInfo.sqrtPriceX96
-                        );
-                        _pairInfo.account_lp_amount0 += _pairInfo
-                            .account_positions[j]
-                            .amount0;
-                        _pairInfo.account_lp_amount1 += _pairInfo
-                            .account_positions[j]
-                            .amount1;
+                        _pairInfo.account_positions[j] = _positions(tokenId, _pairInfo.sqrtPriceX96);
+                        _pairInfo.account_lp_amount0 += _pairInfo.account_positions[j].amount0;
+                        _pairInfo.account_lp_amount1 += _pairInfo.account_positions[j].amount1;
                         //mark nft as sstaked
                         _pairInfo.account_positions[j].isStaked = true;
-                        _pairInfo.account_positions[j].earned = _gauge
-                            .getReward(_account, tokenId);
+                        _pairInfo.account_positions[j].earned = _gauge.getReward(_account, tokenId);
                         j++;
                     }
                 }
@@ -552,42 +443,19 @@ contract PairAPI is Initializable {
         return _pairInfo;
     }
 
-    function _positions(
-        uint256 tokenId,
-        uint160 sqrtPriceX96
-    ) internal view returns (positionInfo memory _pos) {
+    function _positions(uint256 tokenId, uint160 sqrtPriceX96) internal view returns (positionInfo memory _pos) {
         _pos.tokenId = tokenId;
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            _pos.tickLower,
-            _pos.tickUpper,
-            _pos.liquidity,
-            ,
-            ,
-            ,
+        (,,,,, _pos.tickLower, _pos.tickUpper, _pos.liquidity,,,,) = positionManager.positions(tokenId);
+        (_pos.amount0, _pos.amount1) = PositionValue.principal(positionManager, tokenId, sqrtPriceX96);
 
-        ) = positionManager.positions(tokenId);
-        (_pos.amount0, _pos.amount1) = PositionValue.principal(
-            positionManager,
-            tokenId,
-            sqrtPriceX96
-        );
-
-        (_pos.fee_amount0, _pos.fee_amount1) = PositionValue.fees(
-            positionManager,
-            tokenId
-        );
+        (_pos.fee_amount0, _pos.fee_amount1) = PositionValue.fees(positionManager, tokenId);
     }
 
-    function getPairBribe(
-        uint256 _amounts,
-        uint256 _offset,
-        address _pair
-    ) external view returns (pairBribeEpoch[] memory _pairEpoch) {
+    function getPairBribe(uint256 _amounts, uint256 _offset, address _pair)
+        external
+        view
+        returns (pairBribeEpoch[] memory _pairEpoch)
+    {
         require(_amounts <= MAX_EPOCHS, "too many epochs");
 
         _pairEpoch = new pairBribeEpoch[](_amounts);
@@ -618,19 +486,13 @@ contract PairAPI is Initializable {
             _pairEpoch[i - _offset].epochTimestamp = _epochStartTimestamp;
             _pairEpoch[i - _offset].pair = _pair;
             _pairEpoch[i - _offset].totalVotes = _supply;
-            _pairEpoch[i - _offset].bribes = _bribe(
-                _epochStartTimestamp,
-                address(bribe)
-            );
+            _pairEpoch[i - _offset].bribes = _bribe(_epochStartTimestamp, address(bribe));
 
             _epochStartTimestamp += WEEK;
         }
     }
 
-    function _bribe(
-        uint256 _ts,
-        address _br
-    ) internal view returns (tokenBribe[] memory _tb) {
+    function _bribe(uint256 _ts, address _br) internal view returns (tokenBribe[] memory _tb) {
         IBribe _wb = IBribe(_br);
         uint256 tokenLen = _wb.rewardsListLength();
 
@@ -687,10 +549,7 @@ contract PairAPI is Initializable {
         lboxManager = ILiquidBoxManager(_liquidBoxManager);
     }
 
-    function left(
-        address _pair,
-        address _token
-    ) external view returns (uint256 _rewPerEpoch) {
+    function left(address _pair, address _token) external view returns (uint256 _rewPerEpoch) {
         address _gauge = voter.gauges(_pair);
         IBribe bribe = IBribe(voter.internal_bribes(_gauge));
 
@@ -699,20 +558,17 @@ contract PairAPI is Initializable {
         _rewPerEpoch = _reward.rewardsPerEpoch;
     }
 
-    function getGaugeTVL(
-        address _pair,
-        uint256[] memory tokenIds
-    ) external view returns (uint256 amount0, uint256 amount1) {
+    function getGaugeTVL(address _pair, uint256[] memory tokenIds)
+        external
+        view
+        returns (uint256 amount0, uint256 amount1)
+    {
         uint256 len = tokenIds.length;
-        (uint160 sqrtPriceX96, , , , , , ) = IPearlV2Pool(_pair).slot0();
+        (uint160 sqrtPriceX96,,,,,,) = IPearlV2Pool(_pair).slot0();
 
         for (uint256 i = 0; i < len; i++) {
             uint256 tokenId = tokenIds[i];
-            (uint256 _amount0, uint256 _amount1) = PositionValue.principal(
-                positionManager,
-                tokenId,
-                sqrtPriceX96
-            );
+            (uint256 _amount0, uint256 _amount1) = PositionValue.principal(positionManager, tokenId, sqrtPriceX96);
             amount0 += _amount0;
             amount1 += _amount1;
         }

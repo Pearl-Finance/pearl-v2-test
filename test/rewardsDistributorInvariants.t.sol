@@ -23,31 +23,19 @@ contract RewardsDistributorInvariants is Test {
     function setUp() public {
         voter = new MockVoter();
 
-        address votingEscrowProxyAddress = vm.computeCreateAddress(
-            address(this),
-            vm.getNonce(address(this)) + 4
-        );
+        address votingEscrowProxyAddress = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 4);
 
         Pearl pearlImpl = new Pearl(block.chainid, address(0));
-        bytes memory init = abi.encodeCall(
-            pearlImpl.initialize,
-            (votingEscrowProxyAddress)
-        );
+        bytes memory init = abi.encodeCall(pearlImpl.initialize, (votingEscrowProxyAddress));
         ERC1967Proxy pearlProxy = new ERC1967Proxy(address(pearlImpl), init);
 
         vesting = new VotingEscrowVesting(votingEscrowProxyAddress);
 
         VotingEscrow votingEscrowImpl = new VotingEscrow(address(pearlProxy));
 
-        init = abi.encodeCall(
-            votingEscrowImpl.initialize,
-            (address(vesting), address(voter), address(0))
-        );
+        init = abi.encodeCall(votingEscrowImpl.initialize, (address(vesting), address(voter), address(0)));
 
-        ERC1967Proxy votingEscrowProxy = new ERC1967Proxy(
-            address(votingEscrowImpl),
-            init
-        );
+        ERC1967Proxy votingEscrowProxy = new ERC1967Proxy(address(votingEscrowImpl), init);
 
         pearl = Pearl(address(pearlProxy));
         pearl.setMinter(address(11));
@@ -57,10 +45,7 @@ contract RewardsDistributorInvariants is Test {
 
         ERC1967Proxy mainProxy = new ERC1967Proxy(
             address(rewardsDistributor),
-            abi.encodeWithSelector(
-                RewardsDistributor.initialize.selector,
-                address(vePearl)
-            )
+            abi.encodeWithSelector(RewardsDistributor.initialize.selector, address(vePearl))
         );
 
         rewardsDistributor = RewardsDistributor(address(mainProxy));
@@ -69,20 +54,14 @@ contract RewardsDistributorInvariants is Test {
         pearl.mint(address(rewardsDistributor), 100000 ether);
         vm.stopPrank();
 
-        handler = new Handler(
-            rewardsDistributor,
-            address(vePearl),
-            address(pearl)
-        );
+        handler = new Handler(rewardsDistributor, address(vePearl), address(pearl));
 
         bytes4[] memory selectors = new bytes4[](3);
         selectors[0] = Handler.mintNFT.selector;
         selectors[1] = Handler.setRewardAmount.selector;
         selectors[2] = Handler.claim.selector;
 
-        targetSelector(
-            FuzzSelector({addr: address(handler), selectors: selectors})
-        );
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }
 

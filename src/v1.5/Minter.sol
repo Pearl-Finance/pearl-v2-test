@@ -39,12 +39,7 @@ contract Minter is IMinter, OwnableUpgradeable {
 
     bool private _paused;
 
-    event Mint(
-        address indexed sender,
-        uint256 weekly,
-        uint256 circulating_supply,
-        uint256 circulating_emission
-    );
+    event Mint(address indexed sender, uint256 weekly, uint256 circulating_supply, uint256 circulating_emission);
 
     /**
      * @dev Emitted when the pause is triggered by `account`.
@@ -87,9 +82,7 @@ contract Minter is IMinter, OwnableUpgradeable {
         _ve = IVotingEscrow(__ve);
         _rewards_distributor = IRewardsDistributor(__rewards_distributor);
 
-        active_period =
-            ((block.timestamp + (2 * EPOCH_DURATION)) / EPOCH_DURATION) *
-            EPOCH_DURATION;
+        active_period = ((block.timestamp + (2 * EPOCH_DURATION)) / EPOCH_DURATION) * EPOCH_DURATION;
 
         weekly = 2_600_000 * 1e18; // represents a starting weekly emission of 2.6M PEARL
         isFirstMint = true;
@@ -137,9 +130,7 @@ contract Minter is IMinter, OwnableUpgradeable {
     // calculate circulating supply as total token supply - locked supply
     function circulating_supply() public view returns (uint256 _circulating) {
         unchecked {
-            _circulating =
-                _pearl.totalSupply() -
-                _pearl.balanceOf(address(_ve));
+            _circulating = _pearl.totalSupply() - _pearl.balanceOf(address(_ve));
         }
     }
 
@@ -150,8 +141,7 @@ contract Minter is IMinter, OwnableUpgradeable {
 
     // weekly emission takes the max of calculated (aka target) emission versus circulating tail end emission
     function weekly_emission() public view returns (uint256) {
-        return
-            MathUpgradeable.max(calculate_emission(), circulating_emission());
+        return MathUpgradeable.max(calculate_emission(), circulating_emission());
     }
 
     // calculates tail end (infinity) emissions as 0.2% of total supply
@@ -160,9 +150,7 @@ contract Minter is IMinter, OwnableUpgradeable {
     }
 
     // calculate the rebase protection rate, which is to protect against inflation
-    function calculate_rebase(
-        uint256 _weeklyMint
-    ) public view returns (uint256) {
+    function calculate_rebase(uint256 _weeklyMint) public view returns (uint256) {
         uint256 _veTotal = _pearl.balanceOf(address(_ve));
         uint256 _pearlTotal = _pearl.totalSupply();
 
@@ -178,10 +166,7 @@ contract Minter is IMinter, OwnableUpgradeable {
     function update_period() external returns (uint256) {
         uint256 _period = active_period;
 
-        if (
-            block.timestamp >= _period + EPOCH_DURATION &&
-            _initializer == address(0)
-        ) {
+        if (block.timestamp >= _period + EPOCH_DURATION && _initializer == address(0)) {
             // only trigger if new week
             _period = (block.timestamp / EPOCH_DURATION) * EPOCH_DURATION;
             active_period = _period;
@@ -191,12 +176,7 @@ contract Minter is IMinter, OwnableUpgradeable {
                 //_rewards_distributor.checkpoint_token(); // checkpoint token balance that was just minted in rewards distributor
                 //_rewards_distributor.checkpoint_total_supply(); // checkpoint supply
                 _voter.notifyRewardAmount(0);
-                emit Mint(
-                    msg.sender,
-                    0,
-                    circulating_supply(),
-                    circulating_emission()
-                );
+                emit Mint(msg.sender, 0, circulating_supply(), circulating_emission());
             } else {
                 if (!isFirstMint) {
                     weekly = weekly_emission();
@@ -216,21 +196,14 @@ contract Minter is IMinter, OwnableUpgradeable {
                 }
 
                 require(_pearl.transfer(team, _teamEmissions));
-                require(
-                    _pearl.transfer(address(_rewards_distributor), _rebase)
-                );
+                require(_pearl.transfer(address(_rewards_distributor), _rebase));
                 _rewards_distributor.notifyRewardAmount(_rebase);
                 //_rewards_distributor.checkpoint_token(); // checkpoint token balance that was just minted in rewards distributor
                 //_rewards_distributor.checkpoint_total_supply(); // checkpoint supply
                 _pearl.approve(address(_voter), _gauge);
                 _voter.notifyRewardAmount(_gauge);
 
-                emit Mint(
-                    msg.sender,
-                    weekly,
-                    circulating_supply(),
-                    circulating_emission()
-                );
+                emit Mint(msg.sender, weekly, circulating_supply(), circulating_emission());
             }
         }
         return _period;
@@ -238,8 +211,7 @@ contract Minter is IMinter, OwnableUpgradeable {
 
     function check() external view returns (bool) {
         uint256 _period = active_period;
-        return (block.timestamp >= _period + EPOCH_DURATION &&
-            _initializer == address(0));
+        return (block.timestamp >= _period + EPOCH_DURATION && _initializer == address(0));
     }
 
     function period() external view returns (uint256) {
