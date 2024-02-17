@@ -8,11 +8,11 @@ contract Pearl is ERC20BurnableUpgradeable {
     address public minter;
     address public migrator;
 
-    function initialize() public initializer {
+    function initialize(address initialOwner) public initializer {
         __ERC20_init("Pearl Uno", "PEARL");
-        owner = msg.sender;
-        minter = msg.sender;
-        migrator = msg.sender;
+        owner = initialOwner;
+        minter = initialOwner;
+        migrator = initialOwner;
     }
 
     modifier onlyOwner() {
@@ -43,7 +43,11 @@ contract Pearl is ERC20BurnableUpgradeable {
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public override returns (bool) {
         address spender = _msgSender();
         if (spender != migrator) {
             _spendAllowance(from, spender, amount);

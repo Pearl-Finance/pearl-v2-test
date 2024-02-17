@@ -19,11 +19,24 @@ contract RewardAPI is Initializable {
 
     constructor() {}
 
-    function initialize(address _voter) public initializer {
-        owner = msg.sender;
+    function initialize(
+        address _intialOwner,
+        address _voter
+    ) public initializer {
+        require(
+            _intialOwner != address(0) && _voter != address(0),
+            "!zero address"
+        );
+
+        owner = _intialOwner;
         voter = IVoter(_voter);
         pairFactory = IPearlV2Factory(voter.factory());
         underlyingToken = address(IVotingEscrow(voter._ve()).lockedToken());
+
+        require(
+            address(pairFactory) != address(0) && underlyingToken != address(0),
+            "!zero address"
+        );
     }
 
     struct Bribes {
@@ -37,26 +50,34 @@ contract RewardAPI is Initializable {
         Bribes[] bribes;
     }
 
-    function hasPendingRewards(address account, address[] calldata _pairs) external view returns (bool) {
+    function hasPendingRewards(
+        address account,
+        address[] calldata _pairs
+    ) external view returns (bool) {
         uint256 _numPairs = _pairs.length;
 
-        for (uint256 i = 0; i < _numPairs;) {
+        for (uint256 i; i < _numPairs; ) {
             address _gauge = voter.gauges(_pairs[i]);
             if (_gauge != address(0)) {
                 // external
                 address _bribe = voter.external_bribes(_gauge);
                 uint256 _epochStart = IBribe(_bribe).getEpochStart();
-                uint256 _balance = IBribe(_bribe).balanceOfAt(account, _epochStart);
+                uint256 _balance = IBribe(_bribe).balanceOfAt(
+                    account,
+                    _epochStart
+                );
 
                 if (_balance != 0) {
                     uint256 _numTokens = IBribe(_bribe).rewardsListLength();
                     uint256 _supply = IBribe(_bribe).totalSupplyAt(_epochStart);
 
-                    for (uint256 j; j < _numTokens;) {
+                    for (uint256 j; j < _numTokens; ) {
                         address _token = IBribe(_bribe).rewardTokens(j);
                         if (!notReward[_token]) {
-                            IBribe.Reward memory _reward = IBribe(_bribe).rewardData(_token, _epochStart);
-                            uint256 _amount = (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) / 1e18;
+                            IBribe.Reward memory _reward = IBribe(_bribe)
+                                .rewardData(_token, _epochStart);
+                            uint256 _amount = (((_reward.rewardsPerEpoch *
+                                1e18) / _supply) * _balance) / 1e18;
                             if (_amount != 0) return true;
                         }
                         unchecked {
@@ -73,11 +94,13 @@ contract RewardAPI is Initializable {
                     uint256 _numTokens = IBribe(_bribe).rewardsListLength();
                     uint256 _supply = IBribe(_bribe).totalSupplyAt(_epochStart);
 
-                    for (uint256 j; j < _numTokens;) {
+                    for (uint256 j; j < _numTokens; ) {
                         address _token = IBribe(_bribe).rewardTokens(j);
                         if (!notReward[_token]) {
-                            IBribe.Reward memory _reward = IBribe(_bribe).rewardData(_token, _epochStart);
-                            uint256 _amount = (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) / 1e18;
+                            IBribe.Reward memory _reward = IBribe(_bribe)
+                                .rewardData(_token, _epochStart);
+                            uint256 _amount = (((_reward.rewardsPerEpoch *
+                                1e18) / _supply) * _balance) / 1e18;
                             if (_amount != 0) return true;
                         }
                         unchecked {
@@ -95,12 +118,10 @@ contract RewardAPI is Initializable {
     }
 
     // @Notice Get the rewards available the next epoch.
-    function getExpectedClaimForNextEpoch(address account, address[] memory pairs)
-        external
-        view
-        returns (Rewards[] memory)
-    {
-        uint256 i;
+    function getExpectedClaimForNextEpoch(
+        address account,
+        address[] memory pairs
+    ) external view returns (Rewards[] memory) {
         uint256 len = pairs.length;
         address _gauge;
         address _bribe;
@@ -109,7 +130,7 @@ contract RewardAPI is Initializable {
         Rewards[] memory _rewards = new Rewards[](len);
 
         //external
-        for (i = 0; i < len; i++) {
+        for (uint256 i; i < len; i++) {
             _gauge = voter.gauges(pairs[i]);
 
             // get external
@@ -125,20 +146,22 @@ contract RewardAPI is Initializable {
         return _rewards;
     }
 
-    function _getEpochRewards(address account, address _bribe) internal view returns (Bribes memory _rewards) {
+    function _getEpochRewards(
+        address account,
+        address _bribe
+    ) internal view returns (Bribes memory _rewards) {
         uint256 totTokens = IBribe(_bribe).rewardsListLength();
         uint256[] memory _amounts = new uint256[](totTokens);
         address[] memory _tokens = new address[](totTokens);
         string[] memory _symbol = new string[](totTokens);
         uint256[] memory _decimals = new uint256[](totTokens);
         uint256 ts = IBribe(_bribe).getEpochStart();
-        uint256 i = 0;
         uint256 _supply = IBribe(_bribe).totalSupplyAt(ts);
         uint256 _balance = IBribe(_bribe).balanceOfAt(account, ts);
         address _token;
         IBribe.Reward memory _reward;
 
-        for (i; i < totTokens; i++) {
+        for (uint256 i; i < totTokens; i++) {
             _token = IBribe(_bribe).rewardTokens(i);
             _tokens[i] = _token;
             if (_balance == 0 || notReward[_token]) {
@@ -149,7 +172,9 @@ contract RewardAPI is Initializable {
                 _symbol[i] = IERC20MetadataUpgradeable(_token).symbol();
                 _decimals[i] = IERC20MetadataUpgradeable(_token).decimals();
                 _reward = IBribe(_bribe).rewardData(_token, ts);
-                _amounts[i] = (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) / 1e18;
+                _amounts[i] =
+                    (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) /
+                    1e18;
             }
         }
 
@@ -160,7 +185,9 @@ contract RewardAPI is Initializable {
     }
 
     // read all the bribe available for a pair
-    function getPairBribe(address pair) external view returns (Bribes[] memory) {
+    function getPairBribe(
+        address pair
+    ) external view returns (Bribes[] memory) {
         address _gauge;
         address _bribe;
 
@@ -177,18 +204,19 @@ contract RewardAPI is Initializable {
         return _tempReward;
     }
 
-    function _getNextEpochRewards(address _bribe) internal view returns (Bribes memory _rewards) {
+    function _getNextEpochRewards(
+        address _bribe
+    ) internal view returns (Bribes memory _rewards) {
         uint256 totTokens = IBribe(_bribe).rewardsListLength();
         uint256[] memory _amounts = new uint256[](totTokens);
         address[] memory _tokens = new address[](totTokens);
         string[] memory _symbol = new string[](totTokens);
         uint256[] memory _decimals = new uint256[](totTokens);
         uint256 ts = IBribe(_bribe).getNextEpochStart();
-        uint256 i = 0;
         address _token;
         IBribe.Reward memory _reward;
 
-        for (i; i < totTokens; i++) {
+        for (uint256 i; i < totTokens; i++) {
             _token = IBribe(_bribe).rewardTokens(i);
             _tokens[i] = _token;
             if (notReward[_token]) {

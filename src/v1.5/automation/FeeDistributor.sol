@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-
 import "openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
@@ -22,8 +21,14 @@ contract FeeDistributor is OwnableUpgradeable {
 
     constructor() {}
 
-    function initialize(address _pairFactory, address _voter) public initializer {
+    function initialize(
+        address _intialOwner,
+        address _pairFactory,
+        address _voter
+    ) public initializer {
         __Ownable_init();
+        _transferOwnership(_intialOwner);
+
         pairFactory = IPearlV2Factory(_pairFactory);
         voter = IVoter(_voter);
         batchSize = 20;
@@ -31,19 +36,29 @@ contract FeeDistributor is OwnableUpgradeable {
         intervalOffset = 10 minutes;
     }
 
-    function checker() external view returns (bool canExec, bytes memory execPayload) {
+    function checker()
+        external
+        view
+        returns (bool canExec, bytes memory execPayload)
+    {
         canExec = _isDistributing;
         if (!canExec) {
-            uint256 endOfInterval = (block.timestamp / interval) * interval + interval;
+            uint256 endOfInterval = (block.timestamp / interval) *
+                interval +
+                interval;
             uint256 distributionStartTime = endOfInterval - intervalOffset;
-            canExec = block.timestamp > distributionStartTime && _lastProcessed < distributionStartTime;
+            canExec =
+                block.timestamp > distributionStartTime &&
+                _lastProcessed < distributionStartTime;
             if (canExec) {
                 address[] memory gauges = _getGauges();
                 canExec = gauges.length > 0;
             }
         }
         if (canExec) {
-            execPayload = abi.encodeWithSelector(FeeDistributor.distribute.selector);
+            execPayload = abi.encodeWithSelector(
+                FeeDistributor.distribute.selector
+            );
         } else {
             execPayload = "0x";
         }
@@ -79,7 +94,10 @@ contract FeeDistributor is OwnableUpgradeable {
     }
 
     function setInterval(uint256 _interval) external onlyOwner {
-        require(_interval >= 1 hours && _interval <= EPOCH_DURATION, "invalid interval");
+        require(
+            _interval >= 1 hours && _interval <= EPOCH_DURATION,
+            "invalid interval"
+        );
         interval = _interval;
     }
 
@@ -102,12 +120,13 @@ contract FeeDistributor is OwnableUpgradeable {
         uint256 numPairs = pairFactory.allPairsLength();
         address[] memory tmpGauges = new address[](numPairs);
         uint256 numGauges = 0;
-        for (uint256 i = 0; i < numPairs;) {
+        for (uint256 i = 0; i < numPairs; ) {
             address pair = pairFactory.allPairs(i);
             address gauge = voter.gauges(pair);
             if (gauge != address(0)) {
-                (bool success, bytes memory result) =
-                    address(voter).staticcall(abi.encodeWithSignature("isAlive(address)", gauge));
+                (bool success, bytes memory result) = address(voter).staticcall(
+                    abi.encodeWithSignature("isAlive(address)", gauge)
+                );
                 if (success && abi.decode(result, (bool))) {
                     tmpGauges[numGauges] = gauge;
                     unchecked {
@@ -120,7 +139,7 @@ contract FeeDistributor is OwnableUpgradeable {
             }
         }
         gauges = new address[](numGauges);
-        for (uint256 i = 0; i < numGauges;) {
+        for (uint256 i = 0; i < numGauges; ) {
             gauges[i] = tmpGauges[i];
             unchecked {
                 ++i;

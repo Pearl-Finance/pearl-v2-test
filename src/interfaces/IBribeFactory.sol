@@ -1,42 +1,57 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+// SPDX-License-Identifier: GPL-2.0-or-later
+pragma solidity ^0.8.0;
 
-interface IBribeFactory {
-    error BribeFactory_Mismatch_Length();
-    error BribeFactory_Token_Already_Added();
-    error BribeFactory_Zero_Address_Not_Allowed();
-    error BribeFactory_Tokens_Cannot_Be_The_Same();
-    error BribeFactory_Not_A_Default_Reward_Token();
+import "../interfaces/ICrossChainFactory.sol";
 
-    function setVoter(address _Voter) external;
+interface IBribeFactory is ICrossChainFactory {
+  /**
+   * @notice Struct for converting tokens.
+   * @param target Target address for conversion.
+   * @param selector Function selector for the conversion.
+   */
+  struct ConvertData {
+    address target;
+    bytes4 selector;
+  }
 
-    function pushDefaultRewardToken(address _token) external;
+  function createInternalBribe(address[] memory) external returns (address);
 
-    function removeDefaultRewardToken(address _token) external;
+  function createExternalBribe(address[] memory) external returns (address);
 
-    function addRewardToBribe(address _token, address __bribe) external;
+  function createBribe(
+    uint16 _lzMainChainId,
+    uint16 _lzPoolChainId,
+    address _pool,
+    address _owner,
+    address _token0,
+    address _token1,
+    string memory _type
+  ) external returns (address);
 
-    function setBribeOwner(address[] memory _bribe, address _owner) external;
+  /**
+   * @notice Retrieves the address of the keeper.
+   * @return Address of the keeper contract.
+   */
+  function keeper() external view returns (address);
 
-    function setBribeVoter(address[] memory _bribe, address _voter) external;
+  /**
+   * @notice Retrieves the address of the USTB (US T-BILL).
+   * @return Address of the USTB contract.
+   */
+  function ustb() external view returns (address);
 
-    function setBribeMinter(address[] memory _bribe, address _minter) external;
+  /**
+   * @notice Retrieves the main chain ID.
+   * @return Main chain ID.
+   */
+  function mainChainId() external view returns (uint16);
 
-    function addRewardsToBribe(address[] memory _token, address __bribe) external;
-
-    function addRewardToBribes(address _token, address[] memory __bribes) external;
-
-    function initialize(address _voter, address[] calldata defaultRewardTokens) external;
-
-    function addRewardsToBribes(address[][] memory _token, address[] memory __bribes) external;
-
-    function recoverERC20From(address[] memory _bribe, address[][] memory _tokens, uint256[][] memory _amounts)
-        external;
-
-    function recoverERC20AndUpdateData(address[] memory _bribe, address[][] memory _tokens, uint256[][] memory _amounts)
-        external;
-
-    function createBribe(address _owner, address _token0, address _token1, string memory _type)
-        external
-        returns (address);
+  /**
+   * @notice Retrieves the conversion data for a target address.
+   * @param target Target address for conversion.
+   * @return ConvertData struct containing the target and function selector.
+   */
+  function convertData(
+    address target
+  ) external view returns (ConvertData memory);
 }

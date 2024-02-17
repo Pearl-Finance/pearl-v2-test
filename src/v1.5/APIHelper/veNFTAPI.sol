@@ -12,7 +12,9 @@ import "../../interfaces/IVotingEscrow.sol";
 import "../../interfaces/IRewardsDistributor.sol";
 
 interface IVesting {
-    function getSchedule(uint256 tokenId)
+    function getSchedule(
+        uint256 tokenId
+    )
         external
         view
         returns (IVotingEscrow.VestingSchedule memory vestingSchedule);
@@ -96,10 +98,11 @@ interface IPearlV2PoolAPI {
         positionInfo[] account_positions; //nft position information for account
     }
 
-    function getPair(address _pair, address _account, uint8 _version)
-        external
-        view
-        returns (pairInfo memory _pairInfo);
+    function getPair(
+        address _pair,
+        address _account,
+        uint8 _version
+    ) external view returns (pairInfo memory _pairInfo);
 
     function pair_factory() external view returns (address);
 }
@@ -155,7 +158,6 @@ contract veNFTAPI is Initializable {
     IPearlV2Factory public pairFactory;
 
     address public owner;
-
     event Owner(address oldOwner, address newOwner);
 
     struct AllPairRewards {
@@ -164,11 +166,22 @@ contract veNFTAPI is Initializable {
 
     constructor() {}
 
-    function initialize(address _voter, address _rewarddistro, address _pairApi, address _pairFactory)
-        public
-        initializer
-    {
-        owner = msg.sender;
+    function initialize(
+        address _intialOwner,
+        address _voter,
+        address _rewarddistro,
+        address _pairApi,
+        address _pairFactory
+    ) public initializer {
+        require(
+            _intialOwner != address(0) &&
+                _rewarddistro != address(0) &&
+                _pairApi != address(0) &&
+                _pairFactory != address(0),
+            "!zero address"
+        );
+
+        owner = _intialOwner;
 
         pairAPI = _pairApi;
         voter = IVoter(_voter);
@@ -185,13 +198,15 @@ contract veNFTAPI is Initializable {
         return _getNFTFromId(id, ve.ownerOf(id));
     }
 
-    function getNFTFromAddress(address _account) external view returns (Vote memory vote) {
+    function getNFTFromAddress(
+        address _account
+    ) external view returns (Vote memory vote) {
         uint256 _id;
         uint256 totNFTs = ve.balanceOf(_account);
 
         vote.venft = new veNFT[](totNFTs);
 
-        for (uint256 i = totNFTs; i != 0;) {
+        for (uint i = totNFTs; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -207,7 +222,7 @@ contract veNFTAPI is Initializable {
         uint256 _poolWeight;
         address _votedPair;
 
-        for (uint256 k = _totalPoolVotes; k != 0;) {
+        for (uint256 k = _totalPoolVotes; k != 0; ) {
             unchecked {
                 --k;
             }
@@ -221,16 +236,24 @@ contract veNFTAPI is Initializable {
 
         vote.votes = votes;
         vote.voting_amount = ve.getVotes(_account);
-        vote.tokenSymbol = IERC20MetadataUpgradeable(address(ve.lockedToken())).symbol();
-        vote.tokenDecimals = IERC20MetadataUpgradeable(address(ve.lockedToken())).decimals();
+        vote.tokenSymbol = IERC20MetadataUpgradeable(address(ve.lockedToken()))
+            .symbol();
+        vote.tokenDecimals = IERC20MetadataUpgradeable(
+            address(ve.lockedToken())
+        ).decimals();
         vote.voted = voter.hasVoted(_account);
     }
 
-    function getVotingPowerFromAddress(address _account) external view returns (uint256 _votingPower) {
+    function getVotingPowerFromAddress(
+        address _account
+    ) external view returns (uint256 _votingPower) {
         return ve.getVotes(_account);
     }
 
-    function _getNFTFromId(uint256 tokenId, address _account) internal view returns (veNFT memory venft) {
+    function _getNFTFromId(
+        uint256 tokenId,
+        address _account
+    ) internal view returns (veNFT memory venft) {
         if (_account == address(0)) {
             return venft;
         }
@@ -244,14 +267,20 @@ contract veNFTAPI is Initializable {
 
         address vestingContract = ve.vestingContract();
         if (_account == vestingContract) {
-            IVotingEscrow.VestingSchedule memory schedule = IVesting(vestingContract).getSchedule(tokenId);
+            IVotingEscrow.VestingSchedule memory schedule = IVesting(
+                vestingContract
+            ).getSchedule(tokenId);
             venft.lockEnd = schedule.endTime;
         } else {
-            venft.lockEnd = block.timestamp + ve.getRemainingVestingDuration(tokenId);
+            venft.lockEnd =
+                block.timestamp +
+                ve.getRemainingVestingDuration(tokenId);
         }
     }
 
-    function hasClaimableRewards(uint256 _tokenId) external view returns (bool) {
+    function hasClaimableRewards(
+        uint256 _tokenId
+    ) external view returns (bool) {
         if (rewardDistributor.claimable(_tokenId) != 0) {
             return true;
         }
@@ -259,7 +288,7 @@ contract veNFTAPI is Initializable {
         uint256 _totalPairs = pairFactory.allPairsLength();
         address _account = ve.ownerOf(_tokenId);
 
-        for (uint256 i = 0; i < _totalPairs;) {
+        for (uint256 i; i < _totalPairs; ) {
             address _pair = pairFactory.allPairs(i);
             address _gauge = voter.gauges(_pair);
 
@@ -267,27 +296,31 @@ contract veNFTAPI is Initializable {
                 address t0 = IPearlV2Pool(_pair).token0();
                 address t1 = IPearlV2Pool(_pair).token1();
 
-                IPearlV2PoolAPI.pairInfo memory _pairApi =
-                    IPearlV2PoolAPI(pairAPI).getPair(_pair, address(0), uint8(IPearlV2PoolAPI.Version.V3));
+                IPearlV2PoolAPI.pairInfo memory _pairApi = IPearlV2PoolAPI(
+                    pairAPI
+                ).getPair(_pair, address(0), uint8(IPearlV2PoolAPI.Version.V3));
 
-                if (0 != IBribe(_pairApi.gauge_fee).earned(_account, t0)) {
+                if (0 != IBribe(_pairApi.gauge_fee).earned(_account, t0))
                     return true;
-                }
-                if (0 != IBribe(_pairApi.gauge_fee).earned(_account, t1)) {
+                if (0 != IBribe(_pairApi.gauge_fee).earned(_account, t1))
                     return true;
-                }
 
                 address wrappedBribe = _pairApi.bribe;
 
                 if (wrappedBribe != address(0)) {
-                    uint256 _totalBribeTokens = IBribe(wrappedBribe).rewardsListLength();
+                    uint256 _totalBribeTokens = IBribe(wrappedBribe)
+                        .rewardsListLength();
 
-                    for (uint256 j = _totalBribeTokens; j != 0;) {
+                    for (uint256 j = _totalBribeTokens; j != 0; ) {
                         unchecked {
                             --j;
                         }
                         address _token = IBribe(wrappedBribe).rewardTokens(j);
-                        if (0 != IBribe(wrappedBribe).earned(_account, _token) && !notReward[_token]) return true;
+                        if (
+                            0 !=
+                            IBribe(wrappedBribe).earned(_account, _token) &&
+                            !notReward[_token]
+                        ) return true;
                     }
                 }
             }
@@ -299,18 +332,17 @@ contract veNFTAPI is Initializable {
         return false;
     }
 
-    function allPairRewards(uint256 _amount, uint256 _offset, address _account)
-        external
-        view
-        returns (AllPairRewards[] memory rewards)
-    {
+    function allPairRewards(
+        uint256 _amount,
+        uint256 _offset,
+        address _account
+    ) external view returns (AllPairRewards[] memory rewards) {
         rewards = new AllPairRewards[](MAX_PAIRS);
 
         uint256 totalPairs = pairFactory.allPairsLength();
-
-        uint256 i = _offset;
         address _pair;
-        for (i; i < _offset + _amount; i++) {
+
+        for (uint256 i = _offset; i < _offset + _amount; i++) {
             if (i >= totalPairs) {
                 break;
             }
@@ -319,21 +351,29 @@ contract veNFTAPI is Initializable {
         }
     }
 
-    function singlePairReward(address _account, address _pair) external view returns (Reward[] memory _reward) {
+    function singlePairReward(
+        address _account,
+        address _pair
+    ) external view returns (Reward[] memory _reward) {
         return _pairReward(_pair, _account);
     }
 
-    function _pairReward(address _pair, address _account) internal view returns (Reward[] memory _reward) {
+    function _pairReward(
+        address _pair,
+        address _account
+    ) internal view returns (Reward[] memory _reward) {
         if (_pair == address(0)) {
             return _reward;
         }
 
-        IPearlV2PoolAPI.pairInfo memory _pairApi =
-            IPearlV2PoolAPI(pairAPI).getPair(_pair, _account, uint8(IPearlV2PoolAPI.Version.V3));
+        IPearlV2PoolAPI.pairInfo memory _pairApi = IPearlV2PoolAPI(pairAPI)
+            .getPair(_pair, _account, uint8(IPearlV2PoolAPI.Version.V3));
 
         address wrappedBribe = _pairApi.bribe;
 
-        uint256 totBribeTokens = (wrappedBribe == address(0)) ? 0 : IBribe(wrappedBribe).rewardsListLength();
+        uint256 totBribeTokens = (wrappedBribe == address(0))
+            ? 0
+            : IBribe(wrappedBribe).rewardsListLength();
 
         uint256 bribeAmount;
 
@@ -350,8 +390,14 @@ contract veNFTAPI is Initializable {
         {
             address t0 = IPearlV2Pool(_pair).token0();
             address t1 = IPearlV2Pool(_pair).token1();
-            uint256 _feeToken0 = IBribe(_pairApi.gauge_fee).earned(_account, t0);
-            uint256 _feeToken1 = IBribe(_pairApi.gauge_fee).earned(_account, t1);
+            uint256 _feeToken0 = IBribe(_pairApi.gauge_fee).earned(
+                _account,
+                t0
+            );
+            uint256 _feeToken1 = IBribe(_pairApi.gauge_fee).earned(
+                _account,
+                t1
+            );
             if (_feeToken0 > 0) {
                 _reward[0] = Reward({
                     id: 0,
@@ -384,10 +430,9 @@ contract veNFTAPI is Initializable {
             }
         }
 
-        uint256 k = 0;
         address _token;
 
-        for (k; k < totBribeTokens; k++) {
+        for (uint256 k; k < totBribeTokens; k++) {
             _token = IBribe(wrappedBribe).rewardTokens(k);
             bribeAmount = IBribe(wrappedBribe).earned(_account, _token);
             if (!notReward[_token]) {

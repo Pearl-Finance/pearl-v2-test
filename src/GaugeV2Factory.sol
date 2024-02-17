@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "openzeppelin/contracts-upgradeable/proxy/ClonesUpgradeable.sol";
+import {ClonesUpgradeable} from "openzeppelin/contracts-upgradeable/proxy/ClonesUpgradeable.sol";
+import {CrossChainFactoryUpgradeable} from "./cross-chain/CrossChainFactoryUpgradeable.sol";
 
 import "./interfaces/box/ILiquidBoxManager.sol";
 import "./interfaces/dex/IPearlV2Pool.sol";
@@ -17,14 +17,12 @@ import "./interfaces/IGaugeV2Factory.sol";
  * This factory serves as a deployment hub for customizable gauges, enabling liquidity providers to earn rewards
  * through strategic participation in Concentrated Liquidity Pools.
  */
-contract GaugeV2Factory is IGaugeV2Factory, OwnableUpgradeable {
+contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
     using ClonesUpgradeable for address;
 
-    /**
-     *
+    /************************************************
      *  NON UPGRADEABLE STORAGE
-     *
-     */
+     ***********************************************/
 
     address public last_cl_gauge;
     address public last_alm_gauge;
@@ -35,25 +33,40 @@ contract GaugeV2Factory is IGaugeV2Factory, OwnableUpgradeable {
     address public gaugeALMImplementation;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    constructor(
+        uint256 _mainChainId
+    ) CrossChainFactoryUpgradeable(_mainChainId) {
         _disableInitializers();
     }
 
     function initialize(
+        address _intialOwner,
         address _gaugeCLImplementation,
         address _gaugeALMImplementation,
-        address _nonfungiblePositionManager,
+        address _nonFungiblePositionManager,
         address _almManager
     ) public initializer {
-        __Ownable_init();
+        require(
+            _gaugeCLImplementation != address(0) &&
+                _gaugeALMImplementation != address(0) &&
+                _nonFungiblePositionManager != address(0) &&
+                _almManager != address(0),
+            "!zero address"
+        );
+
+        __CrossChainFactory_init();
+        _transferOwnership(_intialOwner);
+
         gaugeCLImplementation = _gaugeCLImplementation;
         gaugeALMImplementation = _gaugeALMImplementation;
-        nonfungiblePositionManager = _nonfungiblePositionManager;
+        nonfungiblePositionManager = _nonFungiblePositionManager;
         almManager = _almManager;
     }
 
     /// @inheritdoc IGaugeV2Factory
     function createGauge(
+        uint16 _lzMainChainId,
+        uint16 _lzPoolChainId,
         address _factory,
         address _pool,
         address _rewardToken,
@@ -61,28 +74,68 @@ contract GaugeV2Factory is IGaugeV2Factory, OwnableUpgradeable {
         address _internalBribe,
         bool _isForPair
     ) external returns (address gauge, address gaugeAlm) {
-        gauge = gaugeCLImplementation.clone();
+        bytes32 salt = keccak256(abi.encodePacked(_lzPoolChainId, _pool, "CL"));
+        gauge = gaugeCLImplementation.cloneDeterministic(salt);
+
         IGaugeV2(gauge).initialize(
-            _factory, _pool, nonfungiblePositionManager, _rewardToken, _distribution, _internalBribe, _isForPair
+            isMainChain,
+            _lzMainChainId,
+            _lzPoolChainId,
+            _factory,
+            _pool,
+            nonfungiblePositionManager,
+            _rewardToken,
+            _distribution,
+            _internalBribe,
+            _isForPair
         );
 
-        //create gauge for ALM LP tokens
-        gaugeAlm = _createGaugeALM(_pool, _rewardToken, gauge);
-        //set alm gauge in master gauge
-        IGaugeV2(gauge).setALMGauge(gaugeAlm);
+        // only allowed on pool chain
+        if (
+            (isMainChain && _lzMainChainId == _lzPoolChainId) ||
+            (!isMainChain && _lzMainChainId != _lzPoolChainId)
+        ) {
+            //create gauge for ALM LP tokens
+            gaugeAlm = _createGaugeALM(
+                _lzPoolChainId,
+                _pool,
+                _rewardToken,
+                gauge
+            );
+            //set alm gauge in master gauge
+            IGaugeV2(gauge).setALMGauge(gaugeAlm);
+        }
 
         last_cl_gauge = gauge;
     }
 
     /// @notice Create gaue for alm LP tokens
     /// @dev gaugeALM must be deployed along with the master gauge.
-    function _createGaugeALM(address _pool, address _rewardToken, address _gaugeCL) internal returns (address gauge) {
+    function _createGaugeALM(
+        uint16 _lzPoolChainId,
+        address _pool,
+        address _rewardToken,
+        address _gaugeCL
+    ) internal returns (address gauge) {
         IPearlV2Pool iPool = IPearlV2Pool(_pool);
         address _almManager = almManager;
-        address _almBox = ILiquidBoxManager(_almManager).getBox(iPool.token0(), iPool.token1(), iPool.fee());
+        address _almBox = ILiquidBoxManager(_almManager).getBox(
+            iPool.token0(),
+            iPool.token1(),
+            iPool.fee()
+        );
 
-        gauge = gaugeALMImplementation.clone();
-        IGaugeV2ALM(gauge).initialize(_rewardToken, _almBox, _gaugeCL, _almManager);
+        bytes32 salt = keccak256(
+            abi.encodePacked(_lzPoolChainId, _pool, "ALM")
+        );
+        gauge = gaugeALMImplementation.cloneDeterministic(salt);
+        IGaugeV2ALM(gauge).initialize(
+            _lzPoolChainId,
+            _rewardToken,
+            _almBox,
+            _gaugeCL,
+            _almManager
+        );
         last_alm_gauge = gauge;
     }
 
@@ -92,7 +145,10 @@ contract GaugeV2Factory is IGaugeV2Factory, OwnableUpgradeable {
      * @param _gauge The address of the gauge for which the distribution contract is being updated.
      * @param _newDistribution The address of the new distribution contract.
      */
-    function setDistribution(address _gauge, address _newDistribution) external onlyOwner {
+    function setDistribution(
+        address _gauge,
+        address _newDistribution
+    ) external onlyOwner {
         IGaugeV2(_gauge).setDistribution(_newDistribution);
     }
 
@@ -114,5 +170,29 @@ contract GaugeV2Factory is IGaugeV2Factory, OwnableUpgradeable {
      */
     function setBox(address _gaugeALM, address _box) external onlyOwner {
         IGaugeV2ALM(_gaugeALM).setBox(_box);
+    }
+
+    /**
+     * @notice Sets a new gauge CL implementation address
+     * @dev This function can only be called by the owner of the contract.
+     * @param _gaugeCLImplementation The address of the new gauge implementation.
+     */
+    function setGaugeCLIMplementation(
+        address _gaugeCLImplementation
+    ) external onlyOwner {
+        require(_gaugeCLImplementation != address(0), "!zero address");
+        gaugeCLImplementation = _gaugeCLImplementation;
+    }
+
+    /**
+     * @notice Sets a new gauge ALM implementation address
+     * @dev This function can only be called by the owner of the contract.
+     * @param _gaugeALMImplementation The address of the new gauge implementation.
+     */
+    function setGaugeALMIMplementation(
+        address _gaugeALMImplementation
+    ) external onlyOwner {
+        require(_gaugeALMImplementation != address(0), "!zero address");
+        gaugeALMImplementation = _gaugeALMImplementation;
     }
 }

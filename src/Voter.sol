@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import {VotesUpgradeable} from "openzeppelin/contracts-upgradeable/governance/utils/VotesUpgradeable.sol";
 import {ERC721Upgradeable} from "openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import {IERC721, IERC721Metadata} from "openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {IVotes} from "openzeppelin/contracts/governance/utils/IVotes.sol";
+import {NonblockingLzAppUpgradeable} from "./cross-chain/NonblockingLzAppUpgradeable.sol";
 
 import "./interfaces/IBribe.sol";
 import "./interfaces/IBribeFactory.sol";
+import "./interfaces/IEpochController.sol";
 import "./interfaces/IMinter.sol";
 import "./interfaces/IVoter.sol";
 import "./interfaces/IVotingEscrow.sol";
@@ -20,10 +21,20 @@ import "./interfaces/dex/IPearlV2Pool.sol";
 import "./interfaces/dex/IPearlV2Factory.sol";
 import "./Epoch.sol";
 
-contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract Voter is
+    IVoter,
+    NonblockingLzAppUpgradeable,
+    ReentrancyGuardUpgradeable
+{
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    bool public immutable isMainChain;
+
+    uint256 constant PRECISION = 10 ** 18;
+
+    address public ustb;
     address public _ve; // the ve token that governs these contracts
     address public factory; // the PairFactory
-    address internal base;
+    address public base;
     address public gaugefactory;
     address public bribefactory;
     address public lBoxFactory;
@@ -31,13 +42,17 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public governor; // should be set to an IGovernor
     address public emergencyCouncil; // credibly neutral party similar to Curve's Emergency DAO
 
-    uint256 internal index;
-    mapping(address => uint256) internal supplyIndex;
-    mapping(address => uint256) public claimable;
-
+    bytes public defaultAdapterParams;
+    uint16 public lzMainChainId;
+    uint16 public lzChainId;
     uint256 public totalWeight; // total voting weight
 
     address[] public pools; // all pools viable for incentives
+    address[] public lzPools; // all pools viable for incentives
+
+    uint256 internal index;
+    mapping(address => uint256) internal supplyIndex;
+
     mapping(address => address) public gauges; // pool => gauge
     mapping(address => address) public gaugesALM; // pool => alm
     mapping(address => uint256) public gaugesDistributionTimestamp;
@@ -53,10 +68,10 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     mapping(address => bool) public isWhitelisted;
     mapping(address => bool) public isAlive;
     mapping(address => bool) public voted;
-
-    address public ustb;
-
     mapping(address => bool) public isBribe;
+    mapping(address => uint256) public claimable;
+
+    address public epochController;
 
     event GaugeCreated(
         address indexed gauge,
@@ -69,77 +84,135 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     event GaugeRevived(address indexed gauge);
     event Voted(address indexed voter, uint256 weight);
     event Abstained(address indexed voter, uint256 weight);
-    event Deposit(address indexed lp, address indexed gauge, uint256 tokenId, uint256 amount);
-    event Withdraw(address indexed lp, address indexed gauge, uint256 tokenId, uint256 amount);
-    event NotifyReward(address indexed sender, address indexed reward, uint256 amount);
-    event DistributeReward(address indexed sender, address indexed gauge, uint256 amount);
+    event Deposit(
+        address indexed lp,
+        address indexed gauge,
+        uint256 tokenId,
+        uint256 amount
+    );
+    event Withdraw(
+        address indexed lp,
+        address indexed gauge,
+        uint256 tokenId,
+        uint256 amount
+    );
+    event NotifyReward(
+        address indexed sender,
+        address indexed reward,
+        uint256 amount
+    );
+    event DistributeReward(
+        address indexed sender,
+        address indexed gauge,
+        uint256 amount
+    );
     event Whitelisted(address indexed whitelister, address indexed token);
+    event LzAdapterParams(uint256 limit);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    constructor(
+        uint256 _mainChainId,
+        address _lzEndpoint
+    ) NonblockingLzAppUpgradeable(_lzEndpoint) {
+        isMainChain = _mainChainId == block.chainid;
         _disableInitializers();
     }
 
-    function initialize(address __ve, address _factory, address _gauges, address _bribes) public initializer {
-        __Ownable_init();
+    function initialize(
+        address _initialOwner,
+        address _emergencyCouncil,
+        address __ve,
+        address _lockedToken,
+        address _factory,
+        address _gauges,
+        address _bribes,
+        uint16 _lzMainChainId,
+        uint16 _lzChainId
+    ) public initializer {
+        require(
+            _initialOwner != address(0) &&
+                _lockedToken != address(0) &&
+                _emergencyCouncil != address(0) &&
+                _factory != address(0) &&
+                _gauges != address(0) &&
+                _bribes != address(0),
+            "!zero address"
+        );
+
+        require(_lzMainChainId != 0 && _lzChainId != 0, "!lzChainId");
+
+        __NonblockingLzApp_init();
         __ReentrancyGuard_init();
-        _ve = __ve;
+
+        _transferOwnership(_initialOwner);
+        governor = _initialOwner;
+        emergencyCouncil = _emergencyCouncil;
+
+        // VotingEscrow is only deployed on main chain
+        if (__ve != address(0)) {
+            _ve = __ve;
+            require(
+                _lockedToken == address(IVotingEscrow(__ve).lockedToken()),
+                "!locked token"
+            );
+        }
+
         factory = _factory;
-        base = address(IVotingEscrow(__ve).lockedToken());
+        base = _lockedToken;
         gaugefactory = _gauges;
         bribefactory = _bribes;
-        governor = msg.sender;
-        emergencyCouncil = msg.sender;
+        lzMainChainId = _lzMainChainId; //set layerzero chain id for protocol mainChain
+        lzChainId = _lzChainId; //set layerzero chain id for protocol mainChain
+        defaultAdapterParams = abi.encodePacked(uint16(1), uint256(30000000)); //set layerZero adapter params for native fees
     }
 
-    function _initialize(address[] memory _tokens, address _minter) external {
-        require(msg.sender == minter || msg.sender == emergencyCouncil);
-        for (uint256 i = 0; i < _tokens.length; i++) {
-            _whitelist(_tokens[i]);
-        }
-        minter = _minter;
+    modifier onlyGovernor() {
+        require(msg.sender == governor, "governor");
+        _;
     }
 
-    function reinitialize() external reinitializer(2) {
-        // first distribution had the wrong period, fix it here
-        uint256 currentTimestamp = IMinter(minter).active_period();
-        for (uint256 i = pools.length; i != 0;) {
-            unchecked {
-                --i;
+    modifier isAllowed() {
+        _checkAllowed();
+        _checkDistribution();
+        _;
+    }
+
+    modifier isClaimAllowed() {
+        _checkAllowed();
+        _;
+    }
+
+    //=======================  INTERNAL  =========================================
+
+    function _checkAllowed() internal view {
+        require(isMainChain, "!mainChain");
+    }
+
+    function _checkDistribution() internal view {
+        require(epochController != address(0), "!epochController");
+        require(
+            !IEpochController(epochController).checkDistribution(),
+            "Voting is not allowed during distribution"
+        );
+    }
+
+    function _updateFor(address _gauge) internal {
+        address _pool = poolForGauge[_gauge];
+        uint256 _supplied = weights[_pool];
+        if (_supplied != 0) {
+            uint256 _supplyIndex = supplyIndex[_gauge];
+            uint256 _index = index; // get global index0 for accumulated distro
+            supplyIndex[_gauge] = _index; // update _gauge current position to global position
+            uint256 _delta = _index - _supplyIndex; // see if there is any difference that need to be accrued
+            if (_delta != 0) {
+                uint256 _share = (_supplied * _delta) / PRECISION; // add accrued difference for each supplied token
+                if (isAlive[_gauge]) {
+                    claimable[_gauge] += _share;
+                }
             }
-            address gauge = gauges[pools[i]];
-            gaugesDistributionTimestamp[gauge] = currentTimestamp;
+        } else {
+            supplyIndex[_gauge] = index; // new users are set to the default global state
         }
-    }
-
-    function setMinter(address _minter) external {
-        require(msg.sender == emergencyCouncil);
-        minter = _minter;
-    }
-
-    function setGovernor(address _governor) public onlyOwner {
-        governor = _governor;
-    }
-
-    function setEmergencyCouncil(address _council) public {
-        require(msg.sender == emergencyCouncil);
-        emergencyCouncil = _council;
-    }
-
-    function setUSTB(address _ustb) external {
-        require(msg.sender == governor);
-        ustb = _ustb;
-    }
-
-    function getIncentivizedPools() external view returns (address[] memory) {
-        return pools;
-    }
-
-    function reset() external nonReentrant {
-        address account = msg.sender;
-        lastVoted[account] = block.timestamp;
-        _reset(account);
-        voted[account] = false;
     }
 
     function _reset(address account) internal {
@@ -155,8 +228,14 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
                 weights[_pool] -= _votes;
                 votes[account][_pool] -= _votes;
                 if (_votes > 0) {
-                    IBribe(internal_bribes[gauges[_pool]])._withdraw(uint256(_votes), account);
-                    IBribe(external_bribes[gauges[_pool]])._withdraw(uint256(_votes), account);
+                    IBribe(internal_bribes[gauges[_pool]])._withdraw(
+                        uint256(_votes),
+                        account
+                    );
+                    IBribe(external_bribes[gauges[_pool]])._withdraw(
+                        uint256(_votes),
+                        account
+                    );
                     _totalWeight += _votes;
                 } else {
                     _totalWeight -= _votes;
@@ -169,23 +248,11 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         delete poolVote[account];
     }
 
-    function poke() external nonReentrant {
-        _poke(msg.sender);
-    }
-
-    function poke(address account) external nonReentrant {
-        require(msg.sender == _ve, "!ve");
-        uint256 lastVotedEpoch = (lastVoted[account] / EPOCH_DURATION) * EPOCH_DURATION;
-        uint256 currentEpoch = IMinter(minter).active_period();
-        if (lastVotedEpoch < currentEpoch) return;
-        _poke(account);
-    }
-
     function _poke(address account) internal {
         address[] memory _poolVote = poolVote[account];
         uint256 _poolCnt = _poolVote.length;
         uint256[] memory _weights = new uint256[](_poolCnt);
-        for (uint256 i = _poolCnt; i != 0;) {
+        for (uint256 i = _poolCnt; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -194,21 +261,25 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         _vote(account, _poolVote, _weights);
     }
 
-    function _vote(address account, address[] memory _poolVote, uint256[] memory _weights) internal {
+    function _vote(
+        address account,
+        address[] memory _poolVote,
+        uint256[] memory _weights
+    ) internal {
         _reset(account);
         uint256 _poolCnt = _poolVote.length;
         uint256 _weight = IVotingEscrow(_ve).getVotes(account);
         uint256 _totalVoteWeight = 0;
         uint256 _usedWeight = 0;
 
-        for (uint256 i = _poolCnt; i != 0;) {
+        for (uint256 i = _poolCnt; i != 0; ) {
             unchecked {
                 --i;
             }
             _totalVoteWeight += _weights[i];
         }
 
-        for (uint256 i = _poolCnt; i != 0;) {
+        for (uint256 i = _poolCnt; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -216,7 +287,8 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
             address _gauge = gauges[_pool];
 
             if (isGauge[_gauge]) {
-                uint256 _poolWeight = (_weights[i] * _weight) / _totalVoteWeight;
+                uint256 _poolWeight = (_weights[i] * _weight) /
+                    _totalVoteWeight;
                 require(votes[account][_pool] == 0);
                 require(_poolWeight != 0);
 
@@ -225,9 +297,15 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
                 weights[_pool] += _poolWeight;
                 votes[account][_pool] += _poolWeight;
 
-                IBribe(internal_bribes[_gauge])._deposit(uint256(_poolWeight), account);
+                IBribe(internal_bribes[_gauge])._deposit(
+                    uint256(_poolWeight),
+                    account
+                );
 
-                IBribe(external_bribes[_gauge])._deposit(uint256(_poolWeight), account);
+                IBribe(external_bribes[_gauge])._deposit(
+                    uint256(_poolWeight),
+                    account
+                );
                 _usedWeight += _poolWeight;
                 emit Voted(account, _poolWeight);
             }
@@ -237,16 +315,24 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         usedWeights[account] = _usedWeight;
     }
 
-    function vote(address[] memory _poolVote, uint256[] memory _weights) external nonReentrant {
-        address account = msg.sender;
-        require(_poolVote.length == _weights.length);
-        lastVoted[account] = block.timestamp;
-        _vote(account, _poolVote, _weights);
-    }
-
-    function whitelist(address _token) public {
-        require(msg.sender == governor, "!governor");
-        _whitelist(_token);
+    function _safeTransferFrom(
+        address token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
+        if (value != 0) {
+            require(token.code.length != 0);
+            (bool success, bytes memory data) = token.call(
+                abi.encodeWithSelector(
+                    IERC20Upgradeable.transferFrom.selector,
+                    from,
+                    to,
+                    value
+                )
+            );
+            require(success && (data.length == 0 || abi.decode(data, (bool))));
+        }
     }
 
     function _whitelist(address _token) internal {
@@ -255,67 +341,84 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         emit Whitelisted(msg.sender, _token);
     }
 
-    function createGauge(address _pool) external returns (address) {
-        require(gauges[_pool] == address(0x0), "exists");
-        address[] memory allowedRewards = new address[](3);
-        address[] memory internalRewards = new address[](2);
-        bool isPair = IPearlV2Factory(factory).isPair(_pool);
-        address tokenA;
-        address tokenB;
+    // VE approval helpers
+    function _isAuthorized(
+        address owner,
+        address spender,
+        uint256 tokenId
+    ) private view returns (bool) {
+        return
+            spender != address(0) &&
+            (owner == spender ||
+                IERC721(_ve).isApprovedForAll(owner, spender) ||
+                IERC721(_ve).getApproved(tokenId) == spender);
+    }
 
-        if (isPair) {
-            // (tokenA, tokenB) = IPearlV2Pool(_pool).tokens();
-            tokenA = IPearlV2Pool(_pool).token0();
-            tokenB = IPearlV2Pool(_pool).token1();
-            allowedRewards[0] = tokenA;
-            allowedRewards[1] = tokenB;
-            internalRewards[0] = tokenA;
-            internalRewards[1] = tokenB;
-
-            if (base != tokenA && base != tokenB) {
-                allowedRewards[2] = base;
+    function _checkAuthorized(
+        address owner,
+        address spender,
+        uint256 tokenId
+    ) private view {
+        if (!_isAuthorized(owner, spender, tokenId)) {
+            if (owner == address(0)) {
+                revert("ERC721: owner query for nonexistent token");
+            } else {
+                revert("ERC721: caller is not owner nor approved");
             }
         }
+    }
 
-        if (msg.sender != governor) {
-            // gov can create for any pool, even non-Pearl pairs
-            require(isPair, "!_pool");
-            require(isWhitelisted[tokenA] && isWhitelisted[tokenB], "!whitelisted");
-            require(ustb == address(0) || tokenA == ustb || tokenB == ustb, "!ustb");
-        }
+    function _createGauge(
+        uint16 _LzPoolChainId,
+        address _pool,
+        address token0,
+        address token1,
+        string memory _bribeType
+    ) internal returns (address) {
+        require(gauges[_pool] == address(0), "exists");
+        require(ustb != address(0), "!ustb ");
+        address _internal_bribe;
+        address _external_bribe;
 
-        string memory _type = string.concat(
-            "Pearl LP Fees: ",
-            string(
-                abi.encodePacked(
-                    "aMM-", IERC20MetadataUpgradeable(tokenA).symbol(), "/", IERC20MetadataUpgradeable(tokenB).symbol()
-                )
-            )
+        uint16 _lzMainChainId = lzMainChainId;
+
+        //create internal bribe contract to collect LP fees
+        string memory _type = string.concat("Pearl LP Fees: ", _bribeType);
+        _internal_bribe = IBribeFactory(bribefactory).createBribe(
+            _lzMainChainId,
+            _LzPoolChainId,
+            _pool,
+            owner(),
+            token0,
+            token1,
+            _type
         );
-
-        address _internal_bribe = IBribeFactory(bribefactory).createBribe(owner(), tokenA, tokenB, _type);
         isBribe[_internal_bribe] = true;
 
-        _type = string.concat(
-            "Pearl Bribes: ",
-            string(
-                abi.encodePacked(
-                    "aMM-", IERC20MetadataUpgradeable(tokenA).symbol(), "/", IERC20MetadataUpgradeable(tokenB).symbol()
-                )
-            )
+        //create external bribe
+        _type = string.concat("Pearl Bribes: ", _bribeType);
+        _external_bribe = IBribeFactory(bribefactory).createBribe(
+            _lzMainChainId,
+            _LzPoolChainId,
+            _pool,
+            owner(),
+            token0,
+            token1,
+            _type
         );
-
-        address _external_bribe = IBribeFactory(bribefactory).createBribe(owner(), tokenA, tokenB, _type);
         isBribe[_external_bribe] = true;
 
-        (address _gauge, address _almGauge) = IGaugeV2Factory(gaugefactory).createGauge(
-            factory,
-            _pool,
-            base, //rewardToken
-            address(this), //Distribution
-            _internal_bribe,
-            isPair
-        );
+        (address _gauge, address _almGauge) = IGaugeV2Factory(gaugefactory)
+            .createGauge(
+                _lzMainChainId,
+                _LzPoolChainId,
+                factory,
+                _pool,
+                base, //rewardToken
+                address(this), //Distribution
+                _internal_bribe,
+                true
+            );
 
         IERC20Upgradeable(base).approve(_gauge, type(uint256).max);
         internal_bribes[_gauge] = _internal_bribe;
@@ -327,8 +430,123 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         isAlive[_gauge] = true;
         supplyIndex[_gauge] = index;
         pools.push(_pool);
-        emit GaugeCreated(_gauge, msg.sender, _internal_bribe, _external_bribe, _pool);
+
+        emit GaugeCreated(
+            _gauge,
+            msg.sender,
+            _internal_bribe,
+            _external_bribe,
+            _pool
+        );
+
         return _gauge;
+    }
+
+    //=======================  ACTION  =========================================
+
+    /**
+     * @notice Creates a new gauge for the specified pool.
+     * @dev Emits a GaugeCreated event upon successful creation.
+     * Adapter parameters should be provided if default parameters are overridden; otherwise, pass "".
+     * _adapterParams = abi.encodePacked(uint16(1), 30000000);
+     * @param _pool The address of the pool for which the gauge is created.
+     * @param _adapterParams The adapter parameters required for Layerzero.
+     * @return _gauge The address of the newly created gauge.
+     */
+    function createGauge(
+        address _pool,
+        bytes memory _adapterParams
+    ) external payable returns (address _gauge) {
+        bool isPair = IPearlV2Factory(factory).isPair(_pool);
+        require(isPair, "!pair");
+
+        address tokenA = IPearlV2Pool(_pool).token0();
+        address tokenB = IPearlV2Pool(_pool).token1();
+
+        if (msg.sender != governor) {
+            // gov can create for any pool, even non-Pearl pairs
+            require(isPair, "!_pool");
+            // require(isWhitelisted[tokenA] && isWhitelisted[tokenB], "!whitelisted");
+            require(
+                ustb == address(0) || tokenA == ustb || tokenB == ustb,
+                "!ustb"
+            );
+        }
+
+        string memory _bribeType = string(
+            abi.encodePacked(
+                "aMM-",
+                IERC20MetadataUpgradeable(tokenA).symbol(),
+                "/",
+                IERC20MetadataUpgradeable(tokenB).symbol()
+            )
+        );
+
+        //create gauge
+        _gauge = _createGauge(lzChainId, _pool, tokenA, tokenB, _bribeType);
+
+        //notify main chain chain to create the child gauge for the pool
+        if (!isMainChain) {
+            _adapterParams = _adapterParams.length > 2
+                ? _adapterParams
+                : defaultAdapterParams;
+            bytes memory _payload = abi.encode(_pool);
+
+            _lzSend(
+                lzMainChainId,
+                _payload,
+                payable(msg.sender),
+                address(0x0),
+                _adapterParams,
+                msg.value
+            );
+        }
+    }
+
+    function _nonblockingLzReceive(
+        uint16 srcChainId,
+        bytes memory, //srcAddress
+        uint64, //nonce
+        bytes memory payload
+    ) internal virtual override {
+        address _pool = abi.decode(payload, (address));
+        //add pool to lzPool list
+        lzPools.push(_pool);
+        _createGauge(srcChainId, _pool, address(0), address(0), "aMM-USTB");
+    }
+
+    function reset() external nonReentrant isAllowed {
+        address account = msg.sender;
+        lastVoted[account] = block.timestamp;
+        _reset(account);
+        voted[account] = false;
+    }
+
+    function poke() external nonReentrant isAllowed {
+        _poke(msg.sender);
+    }
+
+    function poke(address account) external nonReentrant isAllowed {
+        require(msg.sender == _ve, "!ve");
+        uint256 lastVotedEpoch = (lastVoted[account] / EPOCH_DURATION) *
+            EPOCH_DURATION;
+        uint256 currentEpoch = IMinter(minter).active_period();
+        if (lastVotedEpoch < currentEpoch) return;
+        _poke(account);
+    }
+
+    function vote(
+        address[] memory _poolVote,
+        uint256[] memory _weights
+    ) external nonReentrant isAllowed {
+        address account = msg.sender;
+        require(_poolVote.length == _weights.length);
+        lastVoted[account] = block.timestamp;
+        _vote(account, _poolVote, _weights);
+    }
+
+    function whitelist(address _token) public onlyGovernor {
+        _whitelist(_token);
     }
 
     function killGauge(address _gauge) external {
@@ -346,60 +564,21 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         emit GaugeRevived(_gauge);
     }
 
-    function emitDeposit(uint256 tokenId, address account, uint256 amount) external {
+    function emitDeposit(
+        uint256 tokenId,
+        address account,
+        uint256 amount
+    ) external {
         require(isGauge[msg.sender]);
         require(isAlive[msg.sender]);
         emit Deposit(account, msg.sender, tokenId, amount);
     }
 
-    function emitWithdraw(uint256 tokenId, address account, uint256 amount) external {
-        require(isGauge[msg.sender]);
-        emit Withdraw(account, msg.sender, tokenId, amount);
-    }
-
-    function length() external view returns (uint256) {
-        return pools.length;
-    }
-
-    function poolVoteLength(address account) external view returns (uint256) {
-        return poolVote[account].length;
-    }
-
-    function hasVoted(address _account) external view returns (bool) {
-        return voted[_account] && lastVoted[_account] >= IMinter(minter).active_period();
-    }
-
-    function notifyRewardAmount(uint256 amount) external {
-        require(totalWeight != 0, "no votes");
-        _safeTransferFrom(base, msg.sender, address(this), amount); // transfer the distro in
-        uint256 _ratio = (amount * 1e18) / totalWeight; // 1e18 adjustment is removed during claim
-        if (_ratio != 0) {
-            index += _ratio;
-        }
-        emit NotifyReward(msg.sender, base, amount);
-    }
-
-    function _updateFor(address _gauge) internal {
-        address _pool = poolForGauge[_gauge];
-        uint256 _supplied = weights[_pool];
-        if (_supplied != 0) {
-            uint256 _supplyIndex = supplyIndex[_gauge];
-            uint256 _index = index; // get global index0 for accumulated distro
-            supplyIndex[_gauge] = _index; // update _gauge current position to global position
-            uint256 _delta = _index - _supplyIndex; // see if there is any difference that need to be accrued
-            if (_delta != 0) {
-                uint256 _share = (_supplied * _delta) / 1e18; // add accrued difference for each supplied token
-                if (isAlive[_gauge]) {
-                    claimable[_gauge] += _share;
-                }
-            }
-        } else {
-            supplyIndex[_gauge] = index; // new users are set to the default global state
-        }
-    }
-
-    function claimBribes(address[] memory _bribes, address[][] memory _tokens) external {
-        for (uint256 i = _bribes.length; i != 0;) {
+    function claimBribes(
+        address[] memory _bribes,
+        address[][] memory _tokens
+    ) external isClaimAllowed {
+        for (uint256 i = _bribes.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -407,8 +586,11 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         }
     }
 
-    function claimFees(address[] memory _fees, address[][] memory _tokens) external {
-        for (uint256 i = _fees.length; i != 0;) {
+    function claimFees(
+        address[] memory _fees,
+        address[][] memory _tokens
+    ) external isClaimAllowed {
+        for (uint256 i = _fees.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -417,7 +599,7 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     function distributeFees(address[] memory _gauges) external {
-        for (uint256 i = _gauges.length; i != 0;) {
+        for (uint256 i = _gauges.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -450,7 +632,7 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     function distribute(uint256 start, uint256 finish) public {
-        for (uint256 x = start; x < finish;) {
+        for (uint256 x = start; x < finish; ) {
             distribute(gauges[pools[x]]);
             unchecked {
                 ++x;
@@ -459,7 +641,7 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     function distribute(address[] memory _gauges) external {
-        for (uint256 x = _gauges.length; x != 0;) {
+        for (uint256 x = _gauges.length; x != 0; ) {
             unchecked {
                 --x;
             }
@@ -467,17 +649,68 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         }
     }
 
-    function _safeTransferFrom(address token, address from, address to, uint256 value) internal {
-        if (value != 0) {
-            require(token.code.length != 0);
-            (bool success, bytes memory data) =
-                token.call(abi.encodeWithSelector(IERC20Upgradeable.transferFrom.selector, from, to, value));
-            require(success && (data.length == 0 || abi.decode(data, (bool))));
-        }
+    function emitWithdraw(
+        uint256 tokenId,
+        address account,
+        uint256 amount
+    ) external {
+        require(isGauge[msg.sender]);
+        emit Withdraw(account, msg.sender, tokenId, amount);
     }
 
-    function setBribeFactory(address _bribeFactory) external {
+    function notifyRewardAmount(uint256 amount) external {
+        require(totalWeight != 0, "no votes");
+        _safeTransferFrom(base, msg.sender, address(this), amount); // transfer the distro in
+        uint256 _ratio = (amount * PRECISION) / totalWeight; // PRECISION adjustment is removed during claim
+        if (_ratio != 0) {
+            index += _ratio;
+        }
+        emit NotifyReward(msg.sender, base, amount);
+    }
+
+    function increaseGaugeApprovals(address _gauge) external {
         require(msg.sender == emergencyCouncil);
+        require(isGauge[_gauge] = true);
+        IERC20Upgradeable(base).approve(_gauge, 0);
+        IERC20Upgradeable(base).approve(_gauge, type(uint256).max);
+    }
+
+    //=======================  SET  =========================================
+
+    function setMinter(address _minter) external {
+        require(msg.sender == emergencyCouncil);
+        minter = _minter;
+    }
+
+    function setGovernor(address _governor) public onlyOwner {
+        governor = _governor;
+    }
+
+    function setEmergencyCouncil(address _council) public {
+        require(msg.sender == emergencyCouncil);
+        emergencyCouncil = _council;
+    }
+
+    function setUSTB(address _ustb) external onlyGovernor {
+        ustb = _ustb;
+    }
+
+    function setNewBribe(
+        address _gauge,
+        address _internal,
+        address _external
+    ) external {
+        require(msg.sender == emergencyCouncil);
+        require(isGauge[_gauge] = true);
+        internal_bribes[_gauge] = _internal;
+        external_bribes[_gauge] = _external;
+    }
+
+    function setVotingEscrow(address _votingEscrow) external onlyGovernor {
+        _ve = _votingEscrow;
+    }
+
+    function setBribeFactory(address _bribeFactory) external onlyGovernor {
         bribefactory = _bribeFactory;
     }
 
@@ -491,9 +724,14 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         factory = _factory;
     }
 
-    function whitelist(address[] memory _token) public {
-        require(msg.sender == governor);
-        for (uint256 i = _token.length; i != 0;) {
+    function setEpochController(
+        address _epochControllerAddress
+    ) external onlyGovernor {
+        epochController = _epochControllerAddress;
+    }
+
+    function whitelist(address[] memory _token) public onlyGovernor {
+        for (uint256 i = _token.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -501,84 +739,53 @@ contract Voter is IVoter, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         }
     }
 
-    function initGauges(address[] memory _gauges, address[] memory _pools) public {
-        require(msg.sender == emergencyCouncil);
-        for (uint256 i = _pools.length; i != 0;) {
-            unchecked {
-                --i;
-            }
-            address _pool = _pools[i];
-            address _gauge = _gauges[i];
-            address tokenA;
-            address tokenB;
-            // (tokenA, tokenB) = IPearlV2Pool(_pool).tokens();
+    function setLzAdapterParams(uint256 _limit) public onlyOwner {
+        require(_limit >= 200000, "gasLimit");
+        defaultAdapterParams = abi.encodePacked(uint16(1), _limit);
+        emit LzAdapterParams(_limit);
+    }
 
-            tokenA = IPearlV2Pool(_pool).token0();
-            tokenB = IPearlV2Pool(_pool).token1();
+    //=======================  VIEW  =========================================
 
-            string memory _poolStr = string(
-                abi.encodePacked(
-                    "aMM-", IERC20MetadataUpgradeable(tokenA).symbol(), "/", IERC20MetadataUpgradeable(tokenB).symbol()
-                )
+    function getIncentivizedPools() external view returns (address[] memory) {
+        return pools;
+    }
+
+    function length() external view returns (uint256) {
+        return pools.length;
+    }
+
+    function poolVoteLength(address account) external view returns (uint256) {
+        return poolVote[account].length;
+    }
+
+    function hasVoted(address _account) external view returns (bool) {
+        return
+            voted[_account] &&
+            lastVoted[_account] >= IMinter(minter).active_period();
+    }
+
+    function estimateSendFee(
+        address _pool,
+        bool _useZro,
+        bytes memory _adapterParams
+    ) public view returns (uint nativeFee, uint zroFee) {
+        bytes memory _payload = abi.encode(_pool);
+        uint16 _dstChainId = uint16(lzMainChainId);
+        bytes memory trustedRemote = getTrustedRemote(_dstChainId);
+        (address _dstAddress, ) = abi.decode(trustedRemote, (address, address));
+
+        _adapterParams = _adapterParams.length > 2
+            ? _adapterParams
+            : defaultAdapterParams;
+
+        return
+            lzEndpoint.estimateFees(
+                _dstChainId,
+                _dstAddress,
+                _payload,
+                _useZro,
+                _adapterParams
             );
-
-            string memory _type = string.concat("Pearl LP Fees: ", _poolStr);
-            address _internal_bribe = IBribeFactory(bribefactory).createBribe(owner(), tokenA, tokenB, _type);
-            _type = string.concat("Pearl Bribes: ", _poolStr);
-            address _external_bribe = IBribeFactory(bribefactory).createBribe(owner(), tokenA, tokenB, _type);
-            IERC20Upgradeable(base).approve(_gauge, type(uint256).max);
-            internal_bribes[_gauge] = _internal_bribe;
-            external_bribes[_gauge] = _external_bribe;
-            gauges[_pool] = _gauge;
-            poolForGauge[_gauge] = _pool;
-            isGauge[_gauge] = true;
-            isAlive[_gauge] = true;
-            _updateFor(_gauge);
-            pools.push(_pool);
-
-            // update index
-            supplyIndex[_gauge] = index; // new gauges are set to the default global state
-
-            emit GaugeCreated(_gauge, msg.sender, _internal_bribe, _external_bribe, _pool);
-        }
-    }
-
-    function increaseGaugeApprovals(address _gauge) external {
-        require(msg.sender == emergencyCouncil);
-        require(isGauge[_gauge] = true);
-        IERC20Upgradeable(base).approve(_gauge, 0);
-        IERC20Upgradeable(base).approve(_gauge, type(uint256).max);
-    }
-
-    function setNewBribe(address _gauge, address _internal, address _external) external {
-        require(msg.sender == emergencyCouncil);
-        require(isGauge[_gauge] = true);
-        internal_bribes[_gauge] = _internal;
-        external_bribes[_gauge] = _external;
-    }
-
-    function setVotingEscrow(address _votingEscrow) external {
-        require(msg.sender == governor);
-        _ve = _votingEscrow;
-    }
-
-    // VE approval helpers
-
-    function _isAuthorized(address owner, address spender, uint256 tokenId) private view returns (bool) {
-        return spender != address(0)
-            && (
-                owner == spender || IERC721(_ve).isApprovedForAll(owner, spender)
-                    || IERC721(_ve).getApproved(tokenId) == spender
-            );
-    }
-
-    function _checkAuthorized(address owner, address spender, uint256 tokenId) private view {
-        if (!_isAuthorized(owner, spender, tokenId)) {
-            if (owner == address(0)) {
-                revert("ERC721: owner query for nonexistent token");
-            } else {
-                revert("ERC721: caller is not owner nor approved");
-            }
-        }
     }
 }

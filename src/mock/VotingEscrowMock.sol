@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-
 import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // used for testing voting escrow
@@ -11,7 +10,7 @@ contract VotingEscrowMock {
         token = IERC20(_token);
     }
 
-    function lockedToken() external returns (IERC20) {
+    function lockedToken() external view returns (IERC20) {
         return token;
     }
 
@@ -19,7 +18,7 @@ contract VotingEscrowMock {
         token.transferFrom(msg.sender, address(this), lockedBalance);
     }
 
-    function getVotes(address account) external returns (uint256) {
+    function getVotes(address) external pure returns (uint256) {
         return 100 * 10 ** 18;
     }
 }
