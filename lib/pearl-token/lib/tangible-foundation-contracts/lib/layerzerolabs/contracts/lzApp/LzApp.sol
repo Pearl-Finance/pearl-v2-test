@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.0;
-
-import "@openzeppelin/contracts/access/Ownable.sol";
+// /Users/macbook/Documents/Blockchain/Projects/pearl/lzAppTest0/pearl-v2-test/lib/pearl-token/lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/lzApp/LzApp.sol
+import "../../../../../../../openzeppelin-08/contracts/access/Ownable.sol";
 import "./interfaces/ILayerZeroReceiver.sol";
 import "./interfaces/ILayerZeroUserApplicationConfig.sol";
 import "./interfaces/ILayerZeroEndpoint.sol";
@@ -32,12 +32,7 @@ abstract contract LzApp is Ownable, ILayerZeroReceiver, ILayerZeroUserApplicatio
         lzEndpoint = ILayerZeroEndpoint(_endpoint);
     }
 
-    function lzReceive(
-        uint16 _srcChainId,
-        bytes calldata _srcAddress,
-        uint64 _nonce,
-        bytes calldata _payload
-    ) public virtual override {
+    function lzReceive(uint16 _srcChainId, bytes calldata _srcAddress, uint64 _nonce, bytes calldata _payload) public virtual override {
         // lzReceive must be called by the endpoint for security
         require(_msgSender() == address(lzEndpoint), "LzApp: invalid endpoint caller");
 
@@ -52,12 +47,7 @@ abstract contract LzApp is Ownable, ILayerZeroReceiver, ILayerZeroUserApplicatio
     }
 
     // abstract function - the default behaviour of LayerZero is blocking. See: NonblockingLzApp if you dont need to enforce ordered messaging
-    function _blockingLzReceive(
-        uint16 _srcChainId,
-        bytes memory _srcAddress,
-        uint64 _nonce,
-        bytes memory _payload
-    ) internal virtual;
+    function _blockingLzReceive(uint16 _srcChainId, bytes memory _srcAddress, uint64 _nonce, bytes memory _payload) internal virtual;
 
     function _lzSend(
         uint16 _dstChainId,
@@ -73,12 +63,7 @@ abstract contract LzApp is Ownable, ILayerZeroReceiver, ILayerZeroUserApplicatio
         lzEndpoint.send{value: _nativeFee}(_dstChainId, trustedRemote, _payload, _refundAddress, _zroPaymentAddress, _adapterParams);
     }
 
-    function _checkGasLimit(
-        uint16 _dstChainId,
-        uint16 _type,
-        bytes memory _adapterParams,
-        uint _extraGas
-    ) internal view virtual {
+    function _checkGasLimit(uint16 _dstChainId, uint16 _type, bytes memory _adapterParams, uint _extraGas) internal view virtual {
         uint providedGasLimit = _getGasLimit(_adapterParams);
         uint minGasLimit = minDstGasLookup[_dstChainId][_type];
         require(minGasLimit > 0, "LzApp: minGasLimit not set");
@@ -102,22 +87,12 @@ abstract contract LzApp is Ownable, ILayerZeroReceiver, ILayerZeroUserApplicatio
     }
 
     //---------------------------UserApplication config----------------------------------------
-    function getConfig(
-        uint16 _version,
-        uint16 _chainId,
-        address,
-        uint _configType
-    ) external view returns (bytes memory) {
+    function getConfig(uint16 _version, uint16 _chainId, address, uint _configType) external view returns (bytes memory) {
         return lzEndpoint.getConfig(_version, _chainId, address(this), _configType);
     }
 
     // generic config for LayerZero user Application
-    function setConfig(
-        uint16 _version,
-        uint16 _chainId,
-        uint _configType,
-        bytes calldata _config
-    ) external override onlyOwner {
+    function setConfig(uint16 _version, uint16 _chainId, uint _configType, bytes calldata _config) external override onlyOwner {
         lzEndpoint.setConfig(_version, _chainId, _configType, _config);
     }
 
@@ -156,11 +131,7 @@ abstract contract LzApp is Ownable, ILayerZeroReceiver, ILayerZeroUserApplicatio
         emit SetPrecrime(_precrime);
     }
 
-    function setMinDstGas(
-        uint16 _dstChainId,
-        uint16 _packetType,
-        uint _minGas
-    ) external onlyOwner {
+    function setMinDstGas(uint16 _dstChainId, uint16 _packetType, uint _minGas) external onlyOwner {
         minDstGasLookup[_dstChainId][_packetType] = _minGas;
         emit SetMinDstGas(_dstChainId, _packetType, _minGas);
     }
