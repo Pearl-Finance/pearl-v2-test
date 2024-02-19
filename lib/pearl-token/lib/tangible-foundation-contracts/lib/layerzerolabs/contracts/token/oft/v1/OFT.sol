@@ -2,15 +2,21 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import "../../../../../../../../../openzeppelin-08/contracts/token/ERC20/ERC20.sol";
+import "../../../../../../../../../openzeppelin-08/contracts/utils/introspection/IERC165.sol";
 import "./interfaces/IOFT.sol";
 import {OFTCore} from "./OFTCore.sol";
 
 // override decimal() function is needed
 contract OFT is OFTCore, ERC20, IOFT {
     constructor(string memory _name, string memory _symbol, address _lzEndpoint) ERC20(_name, _symbol) OFTCore(_lzEndpoint) {}
+    // function _msgSender() internal view override(Context) returns (address) {
+    //     return msg.sender;
+    // }
 
+    // function _msgData() internal view override(Context) returns (bytes calldata) {
+    //     return msg.data;
+    // }
     function supportsInterface(bytes4 interfaceId) public view virtual override(OFTCore, IERC165) returns (bool) {
         return interfaceId == type(IOFT).interfaceId || interfaceId == type(IERC20).interfaceId || super.supportsInterface(interfaceId);
     }

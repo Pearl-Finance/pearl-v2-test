@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
+import {OFTMockToken} from "./OFTMockToken.sol";
 import {Test, console2 as console} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {GaugeV2} from "../src/GaugeV2.sol";
@@ -13,7 +14,6 @@ import {IPearlV2Factory} from "../src/interfaces/dex/IPearlV2Factory.sol";
 import {SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LZEndpointMock} from "pearl-token/lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/lzApp/mocks/LZEndpointMock.sol";
-// import {OFTMock} from "pearl-token/lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/token/oft/v1/mocks/OFTMock.sol";
 
 /**
  * @title Uint Test For GaugeV2 Contract
@@ -26,6 +26,9 @@ import {LZEndpointMock} from "pearl-token/lib/tangible-foundation-contracts/lib/
 
 contract GaugeV2Test is Test {
     using SafeERC20 for IERC20;
+
+    OFTMockToken public nativeOFT;
+    OFTMockToken public otherOFT;
 
     GaugeV2 public gaugeV2;
     LiquidBox public liquidBox;
@@ -122,18 +125,14 @@ contract GaugeV2Test is Test {
         lzPoolChainId = uint16(101); //arbirum
 
         lzEndPointMockL1 = new LZEndpointMock(lzMainChainId);
-        // nativeOFT = new OFTMock("Pearl Token", "PEARL", address(lzEndPointMockL1));
+        nativeOFT = new OFTMockToken(address(lzEndPointMockL1));
 
         // ######################### L2 Chain ########################################
 
         vm.chainId(42161);
 
         lzEndPointMockL2 = new LZEndpointMock(lzPoolChainId);
-        // otherOFT = new OFTMock(
-        //     "Pearl Token",
-        //     "PEARL",
-        //     address(lzEndPointMockL2)
-        // );
+        otherOFT = new OFTMockToken(address(lzEndPointMockL2));
 
         gaugeV2FactoryL2 = new GaugeV2Factory(mainChainId);
 
@@ -158,25 +157,23 @@ contract GaugeV2Test is Test {
 
         //------  setTrustedRemote(s) -------------------------------------------------------
 
-        // lzEndPointMockL1.setDestLzEndpoint(
-        //     address(otherOFT),
-        //     address(lzEndPointMockL2)
-        // );
-        // lzEndPointMockL2.setDestLzEndpoint(
-        //     address(nativeOFT),
-        //     address(lzEndPointMockL1)
-        // );
+        lzEndPointMockL1.setDestLzEndpoint(
+            address(otherOFT),
+            address(lzEndPointMockL2)
+        );
+        lzEndPointMockL2.setDestLzEndpoint(
+            address(nativeOFT),
+            address(lzEndPointMockL1)
+        );
 
-        // for each OFT, setTrustedRemote to allow it to receive from the remote OFT contract.
-        // Note: This is sometimes referred to as the "wire-up" process.
-        // nativeOFT.setTrustedRemoteAddress(
-        //     lzPoolChainId,
-        //     abi.encodePacked(address(otherOFT))
-        // );
-        // otherOFT.setTrustedRemoteAddress(
-        //     lzMainChainId,
-        //     abi.encodePacked(address(nativeOFT))
-        // );
+        nativeOFT.setTrustedRemoteAddress(
+            lzPoolChainId,
+            abi.encodePacked(address(otherOFT))
+        );
+        otherOFT.setTrustedRemoteAddress(
+            lzMainChainId,
+            abi.encodePacked(address(nativeOFT))
+        );
     }
 
     function test_initialize() public {
