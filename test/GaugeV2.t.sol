@@ -19,8 +19,7 @@ import {SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol"
 import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC721Receiver} from "openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {INonfungiblePositionManager} from "./interfaces/INonfungiblePositionManager.sol";
-import {LZEndpointMock} from
-    "pearl-token/lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/lzApp/mocks/LZEndpointMock.sol";
+import {LZEndpointMock} from "pearl-token/lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/lzApp/mocks/LZEndpointMock.sol";
 
 /**
  * @title Uint Test For GaugeV2 Contract
@@ -60,7 +59,8 @@ contract GaugeV2Test is Test {
     string UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     address pool;
-    address nonfungiblePositionManager = 0x2d59b8a48243b11B0c501991AF5602e9177ee229;
+    address nonfungiblePositionManager =
+        0x2d59b8a48243b11B0c501991AF5602e9177ee229;
 
     address votingEscrow = 0x99E35808207986593531D3D54D898978dB4E5B04;
     address pearlFactory = 0x29b1601d3652527B8e1814347cbB1E7dBe93214E;
@@ -85,31 +85,51 @@ contract GaugeV2Test is Test {
         gaugeV2ALM = new GaugeV2ALM();
         liquidBoxFactory = new LiquidBoxFactory();
 
-        bytes memory init =
-            abi.encodeCall(LiquidBoxFactory.initialize, (address(this), pearlFactory, address(liquidBox)));
+        bytes memory init = abi.encodeCall(
+            LiquidBoxFactory.initialize,
+            (address(this), pearlFactory, address(liquidBox))
+        );
 
-        ERC1967Proxy liquidBoxFactoryProxy = new ERC1967Proxy(address(liquidBoxFactory), init);
+        ERC1967Proxy liquidBoxFactoryProxy = new ERC1967Proxy(
+            address(liquidBoxFactory),
+            init
+        );
 
         liquidBoxFactory = LiquidBoxFactory(address(liquidBoxFactoryProxy));
         liquidBoxManager = new LiquidBoxManager();
 
-        init = abi.encodeCall(LiquidBoxManager.initialize, (address(this), address(liquidBoxFactory)));
+        init = abi.encodeCall(
+            LiquidBoxManager.initialize,
+            (address(this), address(liquidBoxFactory))
+        );
 
-        ERC1967Proxy liquidBoxManagerProxy = new ERC1967Proxy(address(liquidBoxManager), init);
+        ERC1967Proxy liquidBoxManagerProxy = new ERC1967Proxy(
+            address(liquidBoxManager),
+            init
+        );
 
         liquidBoxManager = LiquidBoxManager(address(liquidBoxManagerProxy));
         mainChainId = block.chainid;
 
-        address voterProxyAddress = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 7);
+        address voterProxyAddress = vm.computeCreateAddress(
+            address(this),
+            vm.getNonce(address(this)) + 7
+        );
 
         address[] memory addr = new address[](1);
         addr[0] = pearl;
 
         bribeFactoryL1 = new BribeFactory(mainChainId);
 
-        init = abi.encodeCall(BribeFactory.initialize, (address(this), voterProxyAddress, ustb, addr));
+        init = abi.encodeCall(
+            BribeFactory.initialize,
+            (address(this), voterProxyAddress, ustb, addr)
+        );
 
-        ERC1967Proxy bribeFactoryL1Proxy = new ERC1967Proxy(address(bribeFactoryL1), init);
+        ERC1967Proxy bribeFactoryL1Proxy = new ERC1967Proxy(
+            address(bribeFactoryL1),
+            init
+        );
 
         bribeFactoryL1 = BribeFactory(address(bribeFactoryL1Proxy));
         gaugeV2FactoryL1 = new GaugeV2Factory(mainChainId);
@@ -125,7 +145,10 @@ contract GaugeV2Test is Test {
             )
         );
 
-        ERC1967Proxy gaugeV2FactoryL1Proxy = new ERC1967Proxy(address(gaugeV2FactoryL1), init);
+        ERC1967Proxy gaugeV2FactoryL1Proxy = new ERC1967Proxy(
+            address(gaugeV2FactoryL1),
+            init
+        );
 
         gaugeV2FactoryL1 = GaugeV2Factory(address(gaugeV2FactoryL1Proxy));
         pool = IPearlV2Factory(pearlFactory).getPool(dai, usdc, 1000);
@@ -181,38 +204,102 @@ contract GaugeV2Test is Test {
             )
         );
 
-        ERC1967Proxy gaugeV2FactoryL2Proxy = new ERC1967Proxy(address(gaugeV2FactoryL2), init);
+        ERC1967Proxy gaugeV2FactoryL2Proxy = new ERC1967Proxy(
+            address(gaugeV2FactoryL2),
+            init
+        );
 
         gaugeV2FactoryL2 = GaugeV2Factory(address(gaugeV2FactoryL2Proxy));
         voterL2 = new Voter(mainChainId, address(lzEndPointMockL1));
 
         vm.chainId(mainChainId);
 
-        lzEndPointMockL1.setDestLzEndpoint(address(otherOFT), address(lzEndPointMockL2));
+        lzEndPointMockL1.setDestLzEndpoint(
+            address(otherOFT),
+            address(lzEndPointMockL2)
+        );
 
-        lzEndPointMockL2.setDestLzEndpoint(address(nativeOFT), address(lzEndPointMockL1));
+        lzEndPointMockL2.setDestLzEndpoint(
+            address(nativeOFT),
+            address(lzEndPointMockL1)
+        );
 
-        nativeOFT.setTrustedRemoteAddress(lzPoolChainId, abi.encodePacked(address(otherOFT)));
+        nativeOFT.setTrustedRemoteAddress(
+            lzPoolChainId,
+            abi.encodePacked(address(otherOFT))
+        );
 
-        otherOFT.setTrustedRemoteAddress(lzMainChainId, abi.encodePacked(address(nativeOFT)));
+        otherOFT.setTrustedRemoteAddress(
+            lzMainChainId,
+            abi.encodePacked(address(nativeOFT))
+        );
     }
 
     function test_deposit() public {
-        (uint256 tokenId, uint128 liquidity,,) = mintNewPosition(1 ether, 1 ether);
+        (uint256 tokenId, uint128 liquidityToAdd, , ) = mintNewPosition(
+            1 ether,
+            1 ether
+        );
+
+        IERC721(pearlPositionNFT).approve(address(gaugeV2), tokenId);
+
+        (address owner, uint128 liquidityAdded, , ) = gaugeV2.stakepos(
+            keccak256(abi.encodePacked(address(this), tokenId))
+        );
+
+        assertEq(liquidityAdded, 0);
+        assertEq(gaugeV2.stakedBalance(address(this)), 0);
+
+        gaugeV2.deposit(tokenId);
+
+        (owner, liquidityAdded, , ) = gaugeV2.stakepos(
+            keccak256(abi.encodePacked(address(this), tokenId))
+        );
+
+        assertEq(owner, address(this));
+        assertEq(liquidityToAdd, liquidityAdded);
+        assertEq(gaugeV2.stakedBalance(address(this)), 1);
+    }
+
+    function test_withdraw() public {
+        (uint256 tokenId, uint128 liquidityToAdd, , ) = mintNewPosition(
+            1 ether,
+            1 ether
+        );
 
         IERC721(pearlPositionNFT).approve(address(gaugeV2), tokenId);
         gaugeV2.deposit(tokenId);
+
+        assertEq(gaugeV2.stakedBalance(address(this)), 1);
+        gaugeV2.withdraw(tokenId, address(this), "0x");
+
+        (, uint liquidityAdded, , ) = gaugeV2.stakepos(
+            keccak256(abi.encodePacked(address(this), tokenId))
+        );
+
+        assertEq(0, liquidityAdded);
+        assertEq(gaugeV2.stakedBalance(address(this)), 0);
     }
 
     int24 private constant MIN_TICK = -887272;
     int24 private constant MAX_TICK = -MIN_TICK;
     int24 private constant TICK_SPACING = 60;
 
-    function mintNewPosition(uint256 amount0ToAdd, uint256 amount1ToAdd)
+    function mintNewPosition(
+        uint256 amount0ToAdd,
+        uint256 amount1ToAdd
+    )
         internal
-        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
+        returns (
+            uint256 tokenId,
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        )
     {
-        INonfungiblePositionManager manager = INonfungiblePositionManager(nonfungiblePositionManager);
+        INonfungiblePositionManager manager = INonfungiblePositionManager(
+            nonfungiblePositionManager
+        );
 
         vm.startPrank(0x9e9D5307451D11B2a9F84d9cFD853327F2b7e0F7);
         IERC20(usdc).transfer(address(this), amount1ToAdd);
@@ -226,27 +313,33 @@ contract GaugeV2Test is Test {
         IERC20(dai).approve(address(manager), amount0ToAdd);
         IERC20(usdc).approve(address(manager), amount1ToAdd);
 
-        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
-            token0: dai,
-            token1: usdc,
-            fee: 1000,
-            // By using TickMath.MIN_TICK and TickMath.MAX_TICK,
-            // we are providing liquidity across the whole range of the pool.
-            // Not recommended in production.
-            tickLower: (MIN_TICK / TICK_SPACING) * TICK_SPACING,
-            tickUpper: (MAX_TICK / TICK_SPACING) * TICK_SPACING,
-            amount0Desired: amount0ToAdd,
-            amount1Desired: amount1ToAdd,
-            amount0Min: 0,
-            amount1Min: 0,
-            recipient: address(this),
-            deadline: block.timestamp
-        });
+        INonfungiblePositionManager.MintParams
+            memory params = INonfungiblePositionManager.MintParams({
+                token0: dai,
+                token1: usdc,
+                fee: 1000,
+                // By using TickMath.MIN_TICK and TickMath.MAX_TICK,
+                // we are providing liquidity across the whole range of the pool.
+                // Not recommended in production.
+                tickLower: (MIN_TICK / TICK_SPACING) * TICK_SPACING,
+                tickUpper: (MAX_TICK / TICK_SPACING) * TICK_SPACING,
+                amount0Desired: amount0ToAdd,
+                amount1Desired: amount1ToAdd,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp
+            });
 
         (tokenId, liquidity, amount0, amount1) = manager.mint(params);
     }
 
-    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external returns (bytes4) {
         return this.onERC721Received.selector;
     }
 }
