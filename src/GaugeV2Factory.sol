@@ -20,9 +20,11 @@ import "./interfaces/IGaugeV2Factory.sol";
 contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
     using ClonesUpgradeable for address;
 
-    /************************************************
+    /**
+     *
      *  NON UPGRADEABLE STORAGE
-     ***********************************************/
+     *
+     */
 
     address public last_cl_gauge;
     address public last_alm_gauge;
@@ -33,9 +35,7 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
     address public gaugeALMImplementation;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(
-        uint256 _mainChainId
-    ) CrossChainFactoryUpgradeable(_mainChainId) {
+    constructor(uint256 _mainChainId) CrossChainFactoryUpgradeable(_mainChainId) {
         _disableInitializers();
     }
 
@@ -47,10 +47,8 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
         address _almManager
     ) public initializer {
         require(
-            _gaugeCLImplementation != address(0) &&
-                _gaugeALMImplementation != address(0) &&
-                _nonFungiblePositionManager != address(0) &&
-                _almManager != address(0),
+            _gaugeCLImplementation != address(0) && _gaugeALMImplementation != address(0)
+                && _nonFungiblePositionManager != address(0) && _almManager != address(0),
             "!zero address"
         );
 
@@ -91,17 +89,9 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
         );
 
         // only allowed on pool chain
-        if (
-            (isMainChain && _lzMainChainId == _lzPoolChainId) ||
-            (!isMainChain && _lzMainChainId != _lzPoolChainId)
-        ) {
+        if ((isMainChain && _lzMainChainId == _lzPoolChainId) || (!isMainChain && _lzMainChainId != _lzPoolChainId)) {
             //create gauge for ALM LP tokens
-            gaugeAlm = _createGaugeALM(
-                _lzPoolChainId,
-                _pool,
-                _rewardToken,
-                gauge
-            );
+            gaugeAlm = _createGaugeALM(_lzPoolChainId, _pool, _rewardToken, gauge);
             //set alm gauge in master gauge
             IGaugeV2(gauge).setALMGauge(gaugeAlm);
         }
@@ -111,31 +101,17 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
 
     /// @notice Create gaue for alm LP tokens
     /// @dev gaugeALM must be deployed along with the master gauge.
-    function _createGaugeALM(
-        uint16 _lzPoolChainId,
-        address _pool,
-        address _rewardToken,
-        address _gaugeCL
-    ) internal returns (address gauge) {
+    function _createGaugeALM(uint16 _lzPoolChainId, address _pool, address _rewardToken, address _gaugeCL)
+        internal
+        returns (address gauge)
+    {
         IPearlV2Pool iPool = IPearlV2Pool(_pool);
         address _almManager = almManager;
-        address _almBox = ILiquidBoxManager(_almManager).getBox(
-            iPool.token0(),
-            iPool.token1(),
-            iPool.fee()
-        );
+        address _almBox = ILiquidBoxManager(_almManager).getBox(iPool.token0(), iPool.token1(), iPool.fee());
 
-        bytes32 salt = keccak256(
-            abi.encodePacked(_lzPoolChainId, _pool, "ALM")
-        );
+        bytes32 salt = keccak256(abi.encodePacked(_lzPoolChainId, _pool, "ALM"));
         gauge = gaugeALMImplementation.cloneDeterministic(salt);
-        IGaugeV2ALM(gauge).initialize(
-            _lzPoolChainId,
-            _rewardToken,
-            _almBox,
-            _gaugeCL,
-            _almManager
-        );
+        IGaugeV2ALM(gauge).initialize(_lzPoolChainId, _rewardToken, _almBox, _gaugeCL, _almManager);
         last_alm_gauge = gauge;
     }
 
@@ -145,10 +121,7 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
      * @param _gauge The address of the gauge for which the distribution contract is being updated.
      * @param _newDistribution The address of the new distribution contract.
      */
-    function setDistribution(
-        address _gauge,
-        address _newDistribution
-    ) external onlyOwner {
+    function setDistribution(address _gauge, address _newDistribution) external onlyOwner {
         IGaugeV2(_gauge).setDistribution(_newDistribution);
     }
 
@@ -177,9 +150,7 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
      * @dev This function can only be called by the owner of the contract.
      * @param _gaugeCLImplementation The address of the new gauge implementation.
      */
-    function setGaugeCLIMplementation(
-        address _gaugeCLImplementation
-    ) external onlyOwner {
+    function setGaugeCLIMplementation(address _gaugeCLImplementation) external onlyOwner {
         require(_gaugeCLImplementation != address(0), "!zero address");
         gaugeCLImplementation = _gaugeCLImplementation;
     }
@@ -189,9 +160,7 @@ contract GaugeV2Factory is IGaugeV2Factory, CrossChainFactoryUpgradeable {
      * @dev This function can only be called by the owner of the contract.
      * @param _gaugeALMImplementation The address of the new gauge implementation.
      */
-    function setGaugeALMIMplementation(
-        address _gaugeALMImplementation
-    ) external onlyOwner {
+    function setGaugeALMIMplementation(address _gaugeALMImplementation) external onlyOwner {
         require(_gaugeALMImplementation != address(0), "!zero address");
         gaugeALMImplementation = _gaugeALMImplementation;
     }

@@ -9,22 +9,22 @@ import "./IVotingEscrow.sol";
  * @dev This interface defines functions for interacting with a Rewards Distributor contract.
  */
 interface IRewardsDistributor {
-  /**
-   * @notice Notifies the distribution of a reward amount.
-   * @param amount The amount of reward to distribute.
-   */
-  function notifyRewardAmount(uint256 amount) external;
+    /**
+     * @notice Notifies the distribution of a reward amount.
+     * @param amount The amount of reward to distribute.
+     */
+    function notifyRewardAmount(uint256 amount) external;
 
-  /**
-   * @notice Retrieves the Voting Escrow contract.
-   * @return The address of the Voting Escrow contract.
-   */
-  function ve() external returns (IVotingEscrow);
+    /**
+     * @notice Retrieves the Voting Escrow contract.
+     * @return The address of the Voting Escrow contract.
+     */
+    function ve() external returns (IVotingEscrow);
 
-  /**
-   * @notice Retrieves the claimable reward for a given token ID.
-   * @param _tokenId The token ID for which to check the claimable reward.
-   * @return The claimable reward amount for the specified token ID.
-   */
-  function claimable(uint256 _tokenId) external view returns (uint256);
+    /**
+     * @notice Retrieves the claimable reward for a given token ID.
+     * @param _tokenId The token ID for which to check the claimable reward.
+     * @return The claimable reward amount for the specified token ID.
+     */
+    function claimable(uint256 _tokenId) external view returns (uint256);
 }

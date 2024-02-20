@@ -7,16 +7,14 @@ import "openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
  * @notice Interface for minimal functionality of a Liquid Box contract.
  * @dev This interface extends the ERC20 interface and defines additional functions for interacting with a Liquid Box contract.
  */
+
 interface ILiquidBoxMinimal is IERC20Upgradeable {
     /**
      * @notice Calculates the amount of liquidity in the pool per share.
      * @return liquidityPerShare The calculated liquidity per share.
      * @dev This function is view-only and does not modify the state of the contract.
      */
-    function getPoolLiquidityPerShare()
-        external
-        view
-        returns (uint256 liquidityPerShare);
+    function getPoolLiquidityPerShare() external view returns (uint256 liquidityPerShare);
 
     /**
      * @notice Returns the lower tick boundary of the base position.
@@ -37,10 +35,7 @@ interface ILiquidBoxMinimal is IERC20Upgradeable {
      * @return claimable0 The amount of token0 fees claimed.
      * @return claimable1 The amount of token1 fees claimed.
      */
-    function claimFees(
-        address from,
-        address to
-    ) external returns (uint256 claimable0, uint256 claimable1);
+    function claimFees(address from, address to) external returns (uint256 claimable0, uint256 claimable1);
 
     /**
      * @notice Calculates the amounts of token0 and token1 using shares for a given recipient address.
@@ -50,9 +45,7 @@ interface ILiquidBoxMinimal is IERC20Upgradeable {
      * @return liquidity The calculated liquidity of shares for the recipient.
      * @dev This function is view-only and does not modify the state of the contract.
      */
-    function getSharesAmount(
-        uint256 shares
-    )
+    function getSharesAmount(uint256 shares)
         external
         view
         returns (uint256 amount0, uint256 amount1, uint256 liquidity);
@@ -63,7 +56,5 @@ interface ILiquidBoxMinimal is IERC20Upgradeable {
      * @return amount0 The amount of token0 fees earned by the account.
      * @return amount1 The amount of token1 fees earned by the account.
      */
-    function earnedFees(
-        address account
-    ) external view returns (uint256 amount0, uint256 amount1);
+    function earnedFees(address account) external view returns (uint256 amount0, uint256 amount1);
 }

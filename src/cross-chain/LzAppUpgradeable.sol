@@ -32,10 +32,7 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
 
     // _path = abi.encodePacked(remoteAddress, localAddress)
     // this function set the trusted path for the cross-chain communication
-    function setTrustedRemote(
-        uint16 _remoteChainId,
-        bytes calldata _path
-    ) external onlyOwner {
+    function setTrustedRemote(uint16 _remoteChainId, bytes calldata _path) external onlyOwner {
         trustedRemoteLookup[_remoteChainId] = _path;
         emit SetTrustedRemote(_remoteChainId, _path);
     }
@@ -64,18 +61,10 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
         uint256 nativeFee
     ) internal virtual {
         bytes memory trustedRemote = getTrustedRemote(dstChainId);
-        require(
-            trustedRemote.length != 0,
-            "LzApp: destination chain is not a trusted source"
-        );
+        require(trustedRemote.length != 0, "LzApp: destination chain is not a trusted source");
         _checkPayloadSize(dstChainId, payload.length);
         lzEndpoint.send{value: nativeFee}(
-            dstChainId,
-            trustedRemote,
-            payload,
-            refundAddress,
-            zroPaymentAddress,
-            adapterParams
+            dstChainId, trustedRemote, payload, refundAddress, zroPaymentAddress, adapterParams
         );
     }
 
@@ -92,25 +81,20 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
      * @param nonce A unique identifier for the message.
      * @param payload The actual data payload of the message.
      */
-    function lzReceive(
-        uint16 srcChainId,
-        bytes calldata srcAddress,
-        uint64 nonce,
-        bytes calldata payload
-    ) public virtual override {
+    function lzReceive(uint16 srcChainId, bytes calldata srcAddress, uint64 nonce, bytes calldata payload)
+        public
+        virtual
+        override
+    {
         // lzReceive must be called by the endpoint for security
-        require(
-            _msgSender() == address(lzEndpoint),
-            "LzApp: invalid endpoint caller"
-        );
+        require(_msgSender() == address(lzEndpoint), "LzApp: invalid endpoint caller");
 
         bytes memory trustedRemote = trustedRemoteLookup[srcChainId];
         // if will still block the message pathway from (srcChainId, srcAddress). should not receive message from
         // untrusted remote.
         require(
-            srcAddress.length == trustedRemote.length &&
-                trustedRemote.length != 0 &&
-                keccak256(srcAddress) == keccak256(trustedRemote),
+            srcAddress.length == trustedRemote.length && trustedRemote.length != 0
+                && keccak256(srcAddress) == keccak256(trustedRemote),
             "LzApp: invalid source sending contract"
         );
 
@@ -130,41 +114,28 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
      * @param nonce A unique identifier for the message.
      * @param payload The actual data payload of the message.
      */
-    function _blockingLzReceive(
-        uint16 srcChainId,
-        bytes memory srcAddress,
-        uint64 nonce,
-        bytes memory payload
-    ) internal virtual;
+    function _blockingLzReceive(uint16 srcChainId, bytes memory srcAddress, uint64 nonce, bytes memory payload)
+        internal
+        virtual;
 
-    function isTrustedRemote(
-        uint16 _srcChainId,
-        bytes calldata _srcAddress
-    ) external view returns (bool) {
+    function isTrustedRemote(uint16 _srcChainId, bytes calldata _srcAddress) external view returns (bool) {
         bytes memory trustedSource = trustedRemoteLookup[_srcChainId];
         return keccak256(trustedSource) == keccak256(_srcAddress);
     }
 
-    function getTrustedRemote(
-        uint16 _chainId
-    ) public view returns (bytes memory) {
+    function getTrustedRemote(uint16 _chainId) public view returns (bytes memory) {
         // The factory is instantiated using the create3 factory pattern.
         // All cross-chain contracts created through factory are deterministic and identical.
         // salt: keccak256(abi.encodePacked(_poolChainId, _pool))
         bytes memory trustedRemote = trustedRemoteLookup[_chainId];
-        return
-            trustedRemote.length != 0
-                ? trustedRemote
-                : abi.encodePacked(address(this), address(this));
+        return trustedRemote.length != 0 ? trustedRemote : abi.encodePacked(address(this), address(this));
     }
 
     // generic config for LayerZero user Application
-    function setConfig(
-        uint16 _version,
-        uint16 _chainId,
-        uint _configType,
-        bytes calldata _config
-    ) external onlyOwner {
+    function setConfig(uint16 _version, uint16 _chainId, uint256 _configType, bytes calldata _config)
+        external
+        onlyOwner
+    {
         lzEndpoint.setConfig(_version, _chainId, _configType, _config);
     }
 

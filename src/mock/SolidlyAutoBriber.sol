@@ -9,6 +9,7 @@ import {IBribe} from "../interfaces/IBribe.sol";
 import {IPearlV2Pool} from "../interfaces/dex/IPearlV2Pool.sol";
 import {IPearlV2Factory} from "../interfaces/dex/IPearlV2Factory.sol";
 import {IVoter} from "../interfaces/IVoter.sol";
+
 error NotRegistered(address pair);
 
 /**
@@ -71,12 +72,10 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * @dev This function acts as the initializer in the upgradeable contract pattern, ensuring the reentrancy guard is
      * set up. It can only be called once due to the `initializer` modifier.
      */
-    function initialize(
-        address[] memory filteredTokens
-    ) external reinitializer(2) {
+    function initialize(address[] memory filteredTokens) external reinitializer(2) {
         __Ownable_init();
         __ReentrancyGuard_init();
-        for (uint256 i = filteredTokens.length; i != 0; ) {
+        for (uint256 i = filteredTokens.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -123,7 +122,7 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     function _skimAllPools() internal returns (TokenAmounts[] memory amounts) {
         uint256 numPairs = allPairs.length;
         amounts = new TokenAmounts[](numPairs);
-        for (uint256 i = numPairs; i != 0; ) {
+        for (uint256 i = numPairs; i != 0;) {
             unchecked {
                 --i;
             }
@@ -174,7 +173,7 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      */
     function _adjustAmounts(TokenAmounts[] memory amounts) internal {
         uint256 totalSkimmed;
-        for (uint256 i = amounts.length; i != 0; ) {
+        for (uint256 i = amounts.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -206,7 +205,7 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * adjusted amounts.
      */
     function _depositBribes(TokenAmounts[] memory amounts) internal {
-        for (uint256 i = amounts.length; i != 0; ) {
+        for (uint256 i = amounts.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -247,22 +246,13 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * @param pairFactory Address of the factory contract that provides liquidity pairs.
      * @param voter Address of the voter contract responsible for managing votes and bribes.
      */
-    function registerAllPairs(
-        address pairFactory,
-        address voter
-    ) external onlyOwner {
-        for (
-            uint256 i = IPearlV2Factory(pairFactory).allPairsLength();
-            i != 0;
-
-        ) {
+    function registerAllPairs(address pairFactory, address voter) external onlyOwner {
+        for (uint256 i = IPearlV2Factory(pairFactory).allPairsLength(); i != 0;) {
             unchecked {
                 --i;
             }
             // Attempt to fetch and register each pair.
-            try IPearlV2Factory(pairFactory).allPairs(i) returns (
-                address pair
-            ) {
+            try IPearlV2Factory(pairFactory).allPairs(i) returns (address pair) {
                 registerPair(pair, voter);
             } catch {}
         }
@@ -276,10 +266,7 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * @param pair Address of the liquidity pair to register or update.
      * @param voter Address of the voter contract responsible for managing votes and bribes.
      */
-    function registerPair(
-        address pair,
-        address voter
-    ) public onlyOwner returns (bool registered) {
+    function registerPair(address pair, address voter) public onlyOwner returns (bool registered) {
         (bool exists, SolidlyPair storage _pair) = _tryGetStoredPair(pair);
         if (exists) {
             // Update the voter for the existing pair. Tokens are immutable once the pair is registered.
@@ -293,17 +280,10 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             token0 = IPearlV2Pool(pair).token0();
             token1 = IPearlV2Pool(pair).token1();
 
-            if (
-                registered = (_filteredToken[token0] || _filteredToken[token1])
-            ) {
+            if (registered = (_filteredToken[token0] || _filteredToken[token1])) {
                 uint256 index = allPairs.length;
-                SolidlyPair memory solidlyPair = SolidlyPair({
-                    pair: pair,
-                    token0: token0,
-                    token1: token1,
-                    voter: voter,
-                    index: index
-                });
+                SolidlyPair memory solidlyPair =
+                    SolidlyPair({pair: pair, token0: token0, token1: token1, voter: voter, index: index});
                 allPairs.push(solidlyPair);
                 _pairLookup[pair] = index;
                 emit PairRegistered(pair);
@@ -345,9 +325,7 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * @return found A boolean indicating whether the pair was found.
      * @return storedPair The stored SolidlyPair structure if found.
      */
-    function _tryGetStoredPair(
-        address pair
-    ) private view returns (bool found, SolidlyPair storage storedPair) {
+    function _tryGetStoredPair(address pair) private view returns (bool found, SolidlyPair storage storedPair) {
         assembly {
             storedPair.slot := 0
         }
@@ -369,9 +347,7 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * @param index The index of the SolidlyPair in the `allPairs` array.
      * @return pair The stored SolidlyPair structure at the given index.
      */
-    function _unsafePairAccess(
-        uint256 index
-    ) private pure returns (SolidlyPair storage pair) {
+    function _unsafePairAccess(uint256 index) private pure returns (SolidlyPair storage pair) {
         /// @solidity memory-safe-assembly
         assembly {
             mstore(0, allPairs.slot)

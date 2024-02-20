@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+
 import "openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -48,31 +49,19 @@ contract Bribe is IBribe, ReentrancyGuard {
     mapping(address => bool) public isRewardToken;
     mapping(uint64 => uint256) public rewardCredited;
 
-    mapping(address account => mapping(address token => uint256))
-        public userRewardPerTokenPaid;
-    mapping(address account => mapping(address token => uint256))
-        public userTimestamp;
+    mapping(address account => mapping(address token => uint256)) public userRewardPerTokenPaid;
+    mapping(address account => mapping(address token => uint256)) public userTimestamp;
 
     mapping(uint256 => uint256) public _totalSupply;
-    mapping(address account => mapping(uint256 timestamp => uint256))
-        private _balances;
+    mapping(address account => mapping(uint256 timestamp => uint256)) private _balances;
 
     /* ========== EVENTS ========== */
 
     event RewardCredited(uint64 nonceId, uint256 reward);
-    event RewardAdded(
-        uint64 nonceId,
-        address rewardToken,
-        uint256 reward,
-        uint256 startTimestamp
-    );
+    event RewardAdded(uint64 nonceId, address rewardToken, uint256 reward, uint256 startTimestamp);
     event Staked(address indexed account, uint256 amount);
     event Withdrawn(address indexed account, uint256 amount);
-    event RewardPaid(
-        address indexed user,
-        address indexed rewardsToken,
-        uint256 reward
-    );
+    event RewardPaid(address indexed user, address indexed rewardsToken, uint256 reward);
 
     event Recovered(address token, uint256 amount);
 
@@ -82,11 +71,7 @@ contract Bribe is IBribe, ReentrancyGuard {
      * @param amount Amount of token that was converted.
      * @param amountOut Amount of reward token received.
      */
-    event TokenConverted(
-        address indexed token,
-        uint256 amount,
-        uint256 amountOut
-    );
+    event TokenConverted(address indexed token, uint256 amount, uint256 amountOut);
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -99,21 +84,12 @@ contract Bribe is IBribe, ReentrancyGuard {
         address _bribeFactory,
         string memory _type
     ) {
-        require(
-            _bribeFactory != address(0) &&
-                _voter != address(0) &&
-                _owner != address(0),
-            "!zero address"
-        );
+        require(_bribeFactory != address(0) && _voter != address(0) && _owner != address(0), "!zero address");
+
+        require(_lzMainChainId != 0 && _lzPoolChainId != 0, "!zero lz chain id");
 
         require(
-            _lzMainChainId != 0 && _lzPoolChainId != 0,
-            "!zero lz chain id"
-        );
-
-        require(
-            (_isMainChain && _lzMainChainId == _lzPoolChainId) ||
-                (!isMainChain && _lzMainChainId != _lzPoolChainId),
+            (_isMainChain && _lzMainChainId == _lzPoolChainId) || (!isMainChain && _lzMainChainId != _lzPoolChainId),
             "!lzPoolChain"
         );
 
@@ -163,10 +139,7 @@ contract Bribe is IBribe, ReentrancyGuard {
     }
 
     function _checkRole() internal view {
-        require(
-            (msg.sender == owner || msg.sender == bribeFactory),
-            "permission is denied!"
-        );
+        require((msg.sender == owner || msg.sender == bribeFactory), "permission is denied!");
     }
 
     function _checkKeeper() internal view {
@@ -179,25 +152,17 @@ contract Bribe is IBribe, ReentrancyGuard {
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
-    function _deposit(
-        uint256 amount,
-        address account
-    ) external nonReentrant isAllowed {
+    function _deposit(uint256 amount, address account) external nonReentrant isAllowed {
         require(amount > 0, "Cannot stake 0");
         require(msg.sender == voter);
         uint256 _startTimestamp = getNextEpochStart();
         uint256 _oldSupply = _totalSupply[_startTimestamp];
         _totalSupply[_startTimestamp] = _oldSupply + amount;
-        _balances[account][_startTimestamp] =
-            _balances[account][_startTimestamp] +
-            amount;
+        _balances[account][_startTimestamp] = _balances[account][_startTimestamp] + amount;
         emit Staked(account, amount);
     }
 
-    function _withdraw(
-        uint256 amount,
-        address account
-    ) public nonReentrant isAllowed {
+    function _withdraw(uint256 amount, address account) public nonReentrant isAllowed {
         require(amount > 0, "Cannot withdraw 0");
         require(msg.sender == voter);
         uint256 _startTimestamp = getNextEpochStart();
@@ -211,11 +176,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         }
     }
 
-    function _earned(
-        address account,
-        address _rewardToken,
-        uint256 _timestamp
-    ) internal view returns (uint256) {
+    function _earned(address account, address _rewardToken, uint256 _timestamp) internal view returns (uint256) {
         uint256 _balance = balanceOfAt(account, _timestamp);
         if (_balance == 0) {
             return 0;
@@ -237,35 +198,23 @@ contract Bribe is IBribe, ReentrancyGuard {
      * @param _data Call data for conversion.
      * @return _amountOut Amount received.
      */
-    function _convertToken(
-        address _tokenIn,
-        address _tokenOut,
-        uint256 _amount,
-        address _target,
-        bytes calldata _data
-    ) internal returns (uint256 _amountOut) {
+    function _convertToken(address _tokenIn, address _tokenOut, uint256 _amount, address _target, bytes calldata _data)
+        internal
+        returns (uint256 _amountOut)
+    {
         uint256 _before = IERC20(_tokenOut).balanceOf(address(this));
-        IBribeFactory.ConvertData memory _convertData = IBribeFactory(
-            bribeFactory
-        ).convertData(_target);
+        IBribeFactory.ConvertData memory _convertData = IBribeFactory(bribeFactory).convertData(_target);
         // check if this is a pre-approved contract for swapping/converting
         require(_convertData.target == _target, "invalid target");
-        require(
-            _convertData.selector == bytes4(_data[0:4]),
-            "invalid selector"
-        );
+        require(_convertData.selector == bytes4(_data[0:4]), "invalid selector");
         IERC20(_tokenIn).forceApprove(_target, 0);
         IERC20(_tokenIn).forceApprove(_target, _amount);
-        (bool _success, ) = _target.call(_data);
+        (bool _success,) = _target.call(_data);
         require(_success, "low swap level call failed");
         _amountOut = IERC20(_tokenOut).balanceOf(address(this)) - _before;
     }
 
-    function _addBribeForEpoch(
-        uint64 _nonceId,
-        address _rewardsToken,
-        uint256 reward
-    ) internal {
+    function _addBribeForEpoch(uint64 _nonceId, address _rewardsToken, uint256 reward) internal {
         _reserves[_rewardsToken] += reward;
 
         uint256 _startTimestamp = getNextEpochStart();
@@ -273,17 +222,11 @@ contract Bribe is IBribe, ReentrancyGuard {
             firstBribeTimestamp = _startTimestamp;
         }
 
-        uint256 _lastReward = _rewardData[_rewardsToken][_startTimestamp]
-            .rewardsPerEpoch;
+        uint256 _lastReward = _rewardData[_rewardsToken][_startTimestamp].rewardsPerEpoch;
 
-        _rewardData[_rewardsToken][_startTimestamp].rewardsPerEpoch =
-            _lastReward +
-            reward;
-        _rewardData[_rewardsToken][_startTimestamp].lastUpdateTime = block
-            .timestamp;
-        _rewardData[_rewardsToken][_startTimestamp].periodFinish =
-            _startTimestamp +
-            EPOCH_DURATION;
+        _rewardData[_rewardsToken][_startTimestamp].rewardsPerEpoch = _lastReward + reward;
+        _rewardData[_rewardsToken][_startTimestamp].lastUpdateTime = block.timestamp;
+        _rewardData[_rewardsToken][_startTimestamp].periodFinish = _startTimestamp + EPOCH_DURATION;
 
         emit RewardAdded(_nonceId, _rewardsToken, reward, _startTimestamp);
     }
@@ -292,7 +235,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         uint256 _endTimestamp = getEpochStart();
         uint256 reward = 0;
 
-        for (uint256 i = tokens.length; i != 0; ) {
+        for (uint256 i = tokens.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -310,16 +253,9 @@ contract Bribe is IBribe, ReentrancyGuard {
 
     /* ========== FUNCTIONS ========== */
 
-    function notifyRewardAmount(
-        address _rewardsToken,
-        uint256 reward
-    ) external nonReentrant {
+    function notifyRewardAmount(address _rewardsToken, uint256 reward) external nonReentrant {
         require(isRewardToken[_rewardsToken], "reward token not verified");
-        IERC20(_rewardsToken).safeTransferFrom(
-            msg.sender,
-            address(this),
-            reward
-        );
+        IERC20(_rewardsToken).safeTransferFrom(msg.sender, address(this), reward);
         _addBribeForEpoch(0, _rewardsToken, reward);
     }
 
@@ -333,23 +269,16 @@ contract Bribe is IBribe, ReentrancyGuard {
      * @param token Address of the reward token.
      * @param reward Amount of rewards to be credited.
      */
-    function notifyCredit(
-        uint16 srcChainId,
-        address initiator,
-        address,
-        address token,
-        uint256 reward
-    ) external nonReentrant {
+    function notifyCredit(uint16 srcChainId, address initiator, address, address token, uint256 reward)
+        external
+        nonReentrant
+    {
         // Recieve bribe only on the main chain from the pool chain
         require(isMainChain && (srcChainId == lzPoolChainId), "!mainChain");
 
-        require(
-            msg.sender == address(ustb) && isRewardToken[token],
-            "!reward token"
-        );
+        require(msg.sender == address(ustb) && isRewardToken[token], "!reward token");
 
-        address remoteAddress = IBribeFactory(bribeFactory)
-            .getTrustedRemoteAddress(srcChainId, address(this));
+        address remoteAddress = IBribeFactory(bribeFactory).getTrustedRemoteAddress(srcChainId, address(this));
 
         require(initiator == remoteAddress, "not remote caller");
 
@@ -377,7 +306,7 @@ contract Bribe is IBribe, ReentrancyGuard {
     function skim(address _to) external returns (uint256[] memory _amounts) {
         uint256 _numTokens = rewardTokens.length;
         _amounts = new uint256[](_numTokens);
-        for (uint256 i = _numTokens; i != 0; ) {
+        for (uint256 i = _numTokens; i != 0;) {
             unchecked {
                 --i;
             }
@@ -395,10 +324,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         }
     }
 
-    function skim(
-        address _rewardsToken,
-        address _to
-    ) external returns (uint256 _amount) {
+    function skim(address _rewardsToken, address _to) external returns (uint256 _amount) {
         uint256 _reserve = _reserves[_rewardsToken];
         uint256 _balance = IERC20(_rewardsToken).balanceOf(address(this));
         if (_balance > _reserve) {
@@ -419,12 +345,10 @@ contract Bribe is IBribe, ReentrancyGuard {
      * @param _target Target address for conversion.
      * @param _data Call data for conversion.
      */
-    function convertBribeToken(
-        address _token,
-        uint256 _amount,
-        address _target,
-        bytes calldata _data
-    ) external onlyKeeper {
+    function convertBribeToken(address _token, uint256 _amount, address _target, bytes calldata _data)
+        external
+        onlyKeeper
+    {
         require(!isMainChain, "mainchain");
         require(isRewardToken[_token], "invalid reward token");
         uint256 _before = IERC20(_token).balanceOf(address(this));
@@ -432,13 +356,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         require(_before >= _swapAmount, "balance too low");
         uint256 _amountOut;
         if (_token != ustb) {
-            _amountOut = _convertToken(
-                _token,
-                ustb,
-                _swapAmount,
-                _target,
-                _data
-            );
+            _amountOut = _convertToken(_token, ustb, _swapAmount, _target, _data);
             require(_amountOut != 0, "insufficient output amount");
             uint256 _after = IERC20(_token).balanceOf(address(this));
             require(_after == _before - _swapAmount, "invalid input amount");
@@ -458,8 +376,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         uint256 balance = IOFT(ustb).balanceOf(address(this));
         if (balance > 0) {
             uint16 _dstChainId = lzMainChainId;
-            address dstAddress = IBribeFactory(bribeFactory)
-                .getTrustedRemoteAddress(uint16(_dstChainId), address(this));
+            address dstAddress = IBribeFactory(bribeFactory).getTrustedRemoteAddress(uint16(_dstChainId), address(this));
 
             IOFT(ustb).sendFrom{value: msg.value}(
                 address(this),
@@ -474,21 +391,13 @@ contract Bribe is IBribe, ReentrancyGuard {
     }
 
     /// @notice Recover some ERC20 from the contract and updated given bribe
-    function recoverERC20AndUpdateData(
-        address tokenAddress,
-        uint256 tokenAmount
-    ) external onlyRole {
+    function recoverERC20AndUpdateData(address tokenAddress, uint256 tokenAmount) external onlyRole {
         require(tokenAmount <= IERC20(tokenAddress).balanceOf(address(this)));
 
-        uint256 _startTimestamp = IMinter(minter).active_period() +
-            EPOCH_DURATION;
-        uint256 _lastReward = _rewardData[tokenAddress][_startTimestamp]
-            .rewardsPerEpoch;
-        _rewardData[tokenAddress][_startTimestamp].rewardsPerEpoch =
-            _lastReward -
-            tokenAmount;
-        _rewardData[tokenAddress][_startTimestamp].lastUpdateTime = block
-            .timestamp;
+        uint256 _startTimestamp = IMinter(minter).active_period() + EPOCH_DURATION;
+        uint256 _lastReward = _rewardData[tokenAddress][_startTimestamp].rewardsPerEpoch;
+        _rewardData[tokenAddress][_startTimestamp].rewardsPerEpoch = _lastReward - tokenAmount;
+        _rewardData[tokenAddress][_startTimestamp].lastUpdateTime = block.timestamp;
 
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
@@ -497,10 +406,7 @@ contract Bribe is IBribe, ReentrancyGuard {
     /// @notice Recover some ERC20 from the contract.
     /// @dev    Be careful --> if called then getReward() at last epoch will fail because some reward are missing!
     ///         Think about calling recoverERC20AndUpdateData()
-    function emergencyRecoverERC20(
-        address tokenAddress,
-        uint256 tokenAmount
-    ) external onlyRole {
+    function emergencyRecoverERC20(address tokenAddress, uint256 tokenAmount) external onlyRole {
         require(tokenAmount <= IERC20(tokenAddress).balanceOf(address(this)));
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
@@ -510,7 +416,7 @@ contract Bribe is IBribe, ReentrancyGuard {
 
     /// @notice add rewards tokens
     function addRewards(address[] memory _rewardsToken) public onlyRole {
-        for (uint256 i = _rewardsToken.length; i != 0; ) {
+        for (uint256 i = _rewardsToken.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -555,10 +461,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         return getEpochStart() + EPOCH_DURATION;
     }
 
-    function rewardData(
-        address _token,
-        uint256 _timestamp
-    ) external view override returns (Reward memory) {
+    function rewardData(address _token, uint256 _timestamp) external view override returns (Reward memory) {
         return _rewardData[_token][_timestamp];
     }
 
@@ -574,10 +477,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         return _totalSupply[_timestamp];
     }
 
-    function balanceOfAt(
-        address account,
-        uint256 _timestamp
-    ) public view returns (uint256) {
+    function balanceOfAt(address account, uint256 _timestamp) public view returns (uint256) {
         return _balances[account][_timestamp];
     }
 
@@ -587,10 +487,7 @@ contract Bribe is IBribe, ReentrancyGuard {
         return _balances[account][_timestamp];
     }
 
-    function earned(
-        address account,
-        address _rewardToken
-    ) public view returns (uint256) {
+    function earned(address account, address _rewardToken) public view returns (uint256) {
         uint256 reward = 0;
         uint256 _currentTimestamp = getNextEpochStart();
         uint256 _firstBribeTimestamp = firstBribeTimestamp;
@@ -602,10 +499,7 @@ contract Bribe is IBribe, ReentrancyGuard {
 
         for (uint8 limit = 50; limit > 0; --limit) {
             _currentTimestamp -= EPOCH_DURATION;
-            if (
-                _userLastTime == _currentTimestamp ||
-                _firstBribeTimestamp > _currentTimestamp
-            ) {
+            if (_userLastTime == _currentTimestamp || _firstBribeTimestamp > _currentTimestamp) {
                 // if we reach the user's last claim epoch, exit
                 break;
             }
@@ -614,12 +508,8 @@ contract Bribe is IBribe, ReentrancyGuard {
         return reward;
     }
 
-    function rewardPerToken(
-        address _rewardsToken,
-        uint256 _timestamp
-    ) public view returns (uint256) {
-        uint256 _rewardsPerEpoch = _rewardData[_rewardsToken][_timestamp]
-            .rewardsPerEpoch;
+    function rewardPerToken(address _rewardsToken, uint256 _timestamp) public view returns (uint256) {
+        uint256 _rewardsPerEpoch = _rewardData[_rewardsToken][_timestamp].rewardsPerEpoch;
         if (_totalSupply[_timestamp] == 0) {
             return _rewardsPerEpoch;
         }
@@ -627,17 +517,11 @@ contract Bribe is IBribe, ReentrancyGuard {
         return _rewardsPerEpoch.mulDiv(PRECISION, _totalSupply[_timestamp]);
     }
 
-    function getReward(
-        address account,
-        address[] calldata tokens
-    ) external nonReentrant isAllowed {
+    function getReward(address account, address[] calldata tokens) external nonReentrant isAllowed {
         _getReward(account, tokens);
     }
 
-    function getRewardForOwner(
-        address account,
-        address[] calldata tokens
-    ) public nonReentrant isAllowed {
+    function getRewardForOwner(address account, address[] calldata tokens) public nonReentrant isAllowed {
         require(msg.sender == voter);
         _getReward(account, tokens);
     }

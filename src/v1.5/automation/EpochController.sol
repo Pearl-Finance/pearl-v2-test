@@ -20,11 +20,7 @@ contract EpochController is OwnableUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(
-        address _intialOwner,
-        address _minter,
-        address _voter
-    ) external initializer {
+    function initialize(address _intialOwner, address _minter, address _voter) external initializer {
         __Ownable_init();
         _transferOwnership(_intialOwner);
 
@@ -33,11 +29,7 @@ contract EpochController is OwnableUpgradeable {
         batchSize = 10;
     }
 
-    function checker()
-        external
-        view
-        returns (bool canExec, bytes memory execPayload)
-    {
+    function checker() external view returns (bool canExec, bytes memory execPayload) {
         canExec = _isDistributing;
         if (!canExec) {
             canExec = minter.check();
@@ -46,9 +38,7 @@ contract EpochController is OwnableUpgradeable {
             }
         }
         if (canExec) {
-            execPayload = abi.encodeWithSelector(
-                EpochController.distribute.selector
-            );
+            execPayload = abi.encodeWithSelector(EpochController.distribute.selector);
         } else {
             execPayload = abi.encode(minter.active_period());
         }

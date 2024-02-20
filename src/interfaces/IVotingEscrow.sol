@@ -42,18 +42,14 @@ interface IVotingEscrow is IERC721Enumerable, IERC721Metadata, IVotes {
      * @param tokenId The ID of the token.
      * @return The minting timestamp of the token.
      */
-    function getMintingTimestamp(
-        uint256 tokenId
-    ) external view returns (uint256);
+    function getMintingTimestamp(uint256 tokenId) external view returns (uint256);
 
     /**
      * @notice Retrieves the total voting power at a specific timepoint.
      * @param timepoint The timepoint for which to retrieve the total voting power.
      * @return The total voting power at the specified timepoint.
      */
-    function getPastTotalVotingPower(
-        uint256 timepoint
-    ) external view returns (uint256);
+    function getPastTotalVotingPower(uint256 timepoint) external view returns (uint256);
 
     /**
      * @notice Retrieves the voting power of a token at a specific timepoint.
@@ -61,19 +57,14 @@ interface IVotingEscrow is IERC721Enumerable, IERC721Metadata, IVotes {
      * @param timepoint The timepoint for which to retrieve the voting power.
      * @return The voting power of the token at the specified timepoint.
      */
-    function getPastVotingPower(
-        uint256 tokenId,
-        uint256 timepoint
-    ) external view returns (uint256);
+    function getPastVotingPower(uint256 tokenId, uint256 timepoint) external view returns (uint256);
 
     /**
      * @notice Retrieves the remaining vesting duration of a token.
      * @param tokenId The ID of the token.
      * @return The remaining vesting duration of the token.
      */
-    function getRemainingVestingDuration(
-        uint256 tokenId
-    ) external view returns (uint256);
+    function getRemainingVestingDuration(uint256 tokenId) external view returns (uint256);
 
     /**
      * @notice Mints a new token with vesting schedule.
@@ -82,11 +73,7 @@ interface IVotingEscrow is IERC721Enumerable, IERC721Metadata, IVotes {
      * @param vestingDuration The duration of vesting in seconds.
      * @return The ID of the newly minted token.
      */
-    function mint(
-        address receiver,
-        uint208 lockedBalance,
-        uint256 vestingDuration
-    ) external returns (uint256);
+    function mint(address receiver, uint208 lockedBalance, uint256 vestingDuration) external returns (uint256);
 
     /**
      * @notice Burns a token and releases locked funds to the receiver.
@@ -115,20 +102,14 @@ interface IVotingEscrow is IERC721Enumerable, IERC721Metadata, IVotes {
      * @param shares The array of amounts to split into.
      * @return An array of newly minted token IDs.
      */
-    function split(
-        uint256 tokenId,
-        uint256[] calldata shares
-    ) external returns (uint256[] memory);
+    function split(uint256 tokenId, uint256[] calldata shares) external returns (uint256[] memory);
 
     /**
      * @notice Updates the vesting duration of a token.
      * @param tokenId The ID of the token.
      * @param newDuration The new vesting duration in seconds.
      */
-    function updateVestingDuration(
-        uint256 tokenId,
-        uint256 newDuration
-    ) external;
+    function updateVestingDuration(uint256 tokenId, uint256 newDuration) external;
 
     /**
      * @notice Retrieves the address of the vesting contract.

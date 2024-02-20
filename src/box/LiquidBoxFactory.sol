@@ -21,9 +21,11 @@ import "../interfaces/box/ILiquidBox.sol";
 contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
     using ClonesUpgradeable for address;
 
-    /************************************************
+    /**
+     *
      *  NON UPGRADEABLE STORAGE
-     ***********************************************/
+     *
+     */
 
     address public manager;
     address public override boxManager;
@@ -32,35 +34,24 @@ contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
 
     IPearlV2Factory public pearlV2Factory;
 
-    mapping(address => mapping(address => mapping(uint24 => address)))
-        public getBox; // toke0, token1, fee -> box address
+    mapping(address => mapping(address => mapping(uint24 => address))) public getBox; // toke0, token1, fee -> box address
 
-    /************************************************
+    /**
+     *
      *  EVENTS
-     ***********************************************/
+     *
+     */
 
-    event BoxCreated(
-        address token0,
-        address token1,
-        uint24 fee,
-        address box,
-        uint256
-    );
+    event BoxCreated(address token0, address token1, uint24 fee, address box, uint256);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(
-        address _intialOwner,
-        address _pearlV2Factory,
-        address _boxImplementation
-    ) public initializer {
+    function initialize(address _intialOwner, address _pearlV2Factory, address _boxImplementation) public initializer {
         require(
-            _intialOwner != address(0) &&
-                _pearlV2Factory != address(0) &&
-                _boxImplementation != address(0),
+            _intialOwner != address(0) && _pearlV2Factory != address(0) && _boxImplementation != address(0),
             "!zero address"
         );
 
@@ -82,9 +73,7 @@ contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
     ) external returns (address box) {
         require(msg.sender == manager, "manager");
         require(tokenA != tokenB, "token");
-        (address token0, address token1) = tokenA < tokenB
-            ? (tokenA, tokenB)
-            : (tokenB, tokenA);
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(token0 != address(0));
 
         address pool = pearlV2Factory.getPool(token0, token1, fee);
@@ -93,9 +82,7 @@ contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
 
         int24 tickSpacing = pearlV2Factory.feeAmountTickSpacing(fee);
 
-        bytes32 salt = keccak256(
-            abi.encodePacked(token0, token1, fee, tickSpacing)
-        );
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1, fee, tickSpacing));
         box = boxImplementation.cloneDeterministic(salt);
         ILiquidBox(box).initialize(pool, owner, address(this), name, symbol);
 
@@ -113,9 +100,7 @@ contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
         boxManager = _boxManager;
     }
 
-    function setBoxImplementation(
-        address _boxImplementation
-    ) external onlyOwner {
+    function setBoxImplementation(address _boxImplementation) external onlyOwner {
         boxImplementation = _boxImplementation;
     }
 }
