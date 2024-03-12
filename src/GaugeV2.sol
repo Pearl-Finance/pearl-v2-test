@@ -562,23 +562,17 @@ contract GaugeV2 is IGaugeV2, Initializable, OwnableUpgradeable, ReentrancyGuard
         external
         nonReentrant
     {
-        console.log(address(this), "e reach here");
         // Recieve emissions only on the pool chain from main chain
         require(!isMainChain && (srcChainId == lzMainChainId), "not allowed on main chain");
-        console.log(address(this), "e reach here0");
-
         require(msg.sender == address(rewardToken) && token == address(rewardToken), "!reward token");
-        console.log(address(this), "e reach here1");
 
         address remoteAddress = gaugeFactory.getTrustedRemoteAddress(srcChainId, address(this));
-        console.log(address(this), "e reach here2");
 
         require(initiator == remoteAddress, "not remote caller");
 
         nonce += 1;
 
         rewardCredited[nonce] = reward;
-        console.log(nonce, rewardCredited[nonce], "e reach here");
         emit RewardCredited(nonce, reward);
     }
 
