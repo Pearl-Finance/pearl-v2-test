@@ -16,8 +16,13 @@ interface ILiquidBox {
      * @param name Name of the box.
      * @param symbol Symbol of the box.
      */
-    function initialize(address pool, address owner, address boxFactory, string memory name, string memory symbol)
-        external;
+    function initialize(
+        address pool,
+        address owner,
+        address boxFactory,
+        string memory name,
+        string memory symbol
+    ) external;
 
     /**
      * @notice Deposits tokens into the vault, distributing them in proportion to the current holdings.
@@ -31,41 +36,31 @@ interface ILiquidBox {
      * @return amount0 Amount of token0 deposited.
      * @return amount1 Amount of token1 deposited.
      */
-    function deposit(uint256 amount0Desired, uint256 amount1Desired, address to, uint256 amount0Min, uint256 amount1Min)
-        external
-        returns (uint256 shares, uint256 amount0, uint256 amount1);
+    function deposit(
+        uint256 amount0Desired,
+        uint256 amount1Desired,
+        address to,
+        uint256 amount0Min,
+        uint256 amount1Min
+    ) external returns (uint256 shares, uint256 amount0, uint256 amount1);
 
     /**
      * @notice Withdraws tokens in proportion to the vault's holdings.
      * @param shares Shares burned by sender.
+     * @param from The address for LP.
      * @param to Recipient of tokens.
      * @param amount0Min Revert if resulting `amount0` is smaller than this.
      * @param amount1Min Revert if resulting `amount1` is smaller than this.
      * @return amount0 Amount of token0 sent to recipient.
      * @return amount1 Amount of token1 sent to recipient.
      */
-    function withdraw(uint256 shares, address to, uint256 amount0Min, uint256 amount1Min)
-        external
-        returns (uint256 amount0, uint256 amount1);
-
-    /**
-     * @notice Add Liquidity in the pool.
-     * @dev Only the manager can add liquidity in case of rebalancing scenarios.
-     * @param tickLower Lower limit of the position.
-     * @param tickUpper Upper limit of the position.
-     * @param amount0 Amount in token0 to be added to the pool.
-     * @param amount1 Amount in token1 to be added to the pool.
-     * @param amount0Min Minimum amount in token0 to be added to the pool.
-     * @param amount1Min Minimum amount in token1 to be added to the pool.
-     */
-    function addLiquidity(
-        int24 tickLower,
-        int24 tickUpper,
-        uint256 amount0,
-        uint256 amount1,
+    function withdraw(
+        uint256 shares,
+        address from,
+        address to,
         uint256 amount0Min,
         uint256 amount1Min
-    ) external;
+    ) external returns (uint256 amount0, uint256 amount1);
 
     /**
      * @notice Updates box's positions during rebalance.
@@ -89,14 +84,20 @@ interface ILiquidBox {
     /**
      * @notice Updates vault's positions.
      * @dev Pull liquidity out from the pool.
+     * When the gauge is enabled, the total shares will be removed from the pool.
      * @param baseLower Lower limit of the position.
      * @param baseUpper Upper limit of the position.
      * @param shares Quantity of the LP tokens.
      * @param amount0Min Minimum amount in token0 to be added to the pool.
      * @param amount1Min Minimum amount in token1 to be added to the pool.
      */
-    function pullLiquidity(int24 baseLower, int24 baseUpper, uint128 shares, uint256 amount0Min, uint256 amount1Min)
-        external;
+    function pullLiquidity(
+        int24 baseLower,
+        int24 baseUpper,
+        uint256 shares,
+        uint256 amount0Min,
+        uint256 amount1Min
+    ) external;
 
     /**
      * @notice Claims collected management fees and transfers them to the specified address.
@@ -106,7 +107,9 @@ interface ILiquidBox {
      * @return collectedfees1 The amount of collected fees denominated in token1.
      * @return collectedFeesOnEmission The amount of collected fees on reward emission from gauge.
      */
-    function claimManagementFees(address to) external returns (uint256, uint256, uint256);
+    function claimManagementFees(
+        address to
+    ) external returns (uint256, uint256, uint256);
 
     /**
      * @notice Claims collected user fees and transfers them to the user address.
@@ -116,7 +119,10 @@ interface ILiquidBox {
      * @return collectedfees0 The amount of collected fees denominated in token0.
      * @return collectedfees1 The amount of collected fees denominated in token1.
      */
-    function claimFees(address from, address to) external returns (uint256, uint256);
+    function claimFees(
+        address from,
+        address to
+    ) external returns (uint256, uint256);
 
     // State variables
 
@@ -208,7 +214,10 @@ interface ILiquidBox {
      * @return liquidityPerShare The calculated liquidity of shares for the recipient.
      * @dev This function is view-only and does not modify the state of the contract.
      */
-    function getPoolLiquidityPerShare() external view returns (uint256 liquidityPerShare);
+    function getPoolLiquidityPerShare()
+        external
+        view
+        returns (uint256 liquidityPerShare);
 
     /**
      * @notice Calculates the amounts of token0 and token1 using shares for a given recipient address.
@@ -218,7 +227,9 @@ interface ILiquidBox {
      * @return liquidity The calculated liquidity of shares.
      * @dev This function is view-only and does not modify the state of the contract.
      */
-    function getSharesAmount(uint256 shares)
+    function getSharesAmount(
+        uint256 shares
+    )
         external
         view
         returns (uint256 amount0, uint256 amount1, uint256 liquidity);
@@ -236,12 +247,21 @@ interface ILiquidBox {
     function getTotalAmounts()
         external
         view
-        returns (uint256 total0, uint256 total1, uint256 pool0, uint256 pool1, uint128 liquidity);
+        returns (
+            uint256 total0,
+            uint256 total1,
+            uint256 pool0,
+            uint256 pool1,
+            uint128 liquidity
+        );
 
     /// @notice Get the sqrt price before the given interval
     /// @param twapInterval Time intervals
-    /// @return sqrtPriceX96 Sqrt price before interval
-    function getSqrtTwapX96(uint32 twapInterval) external view returns (uint160 sqrtPriceX96);
+    /// @return sqrtPriceX96 Current sqrt price
+    /// @return sqrtPriceX96Twap Sqrt price before interval
+    function getSqrtTwapX96(
+        uint32 twapInterval
+    ) external view returns (uint160 sqrtPriceX96, uint160 sqrtPriceX96Twap);
 
     /**
      * @notice Returns the earned fees for a specific account.
@@ -249,7 +269,9 @@ interface ILiquidBox {
      * @return amount0 The amount of earned fees denominated in token0.
      * @return amount1 The amount of earned fees denominated in token1.
      */
-    function earnedFees(address account) external view returns (uint256 amount0, uint256 amount1);
+    function earnedFees(
+        address account
+    ) external view returns (uint256 amount0, uint256 amount1);
 
     /**
      * @notice Returns the management fees that can be claimed.
@@ -257,7 +279,10 @@ interface ILiquidBox {
      * @return claimable1 The amount of claimable fees denominated in token1.
      * @return emission The collected amount of fees on reward emission from the gauge.
      */
-    function getManagementFees() external view returns (uint256 claimable0, uint256 claimable1, uint256 emission);
+    function getManagementFees()
+        external
+        view
+        returns (uint256 claimable0, uint256 claimable1, uint256 emission);
 
     function getPoolParams() external view returns (address, address, uint24);
 
@@ -268,10 +293,10 @@ interface ILiquidBox {
      * @return required0 The required amount of token0 for the current tick range
      * @return required1 The required amount of token1 for the current tick range
      */
-    function getRequiredAmountsForInput(uint256 deposit0, uint256 deposit1)
-        external
-        view
-        returns (uint256 required0, uint256 required1);
+    function getRequiredAmountsForInput(
+        uint256 deposit0,
+        uint256 deposit1
+    ) external view returns (uint256 required0, uint256 required1);
 
     function setMaxTotalSupply(uint256 _maxTotalSupply) external;
 

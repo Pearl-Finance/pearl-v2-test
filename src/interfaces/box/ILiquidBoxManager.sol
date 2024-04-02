@@ -2,6 +2,13 @@
 pragma solidity ^0.8.0;
 
 interface ILiquidBoxManager {
+  struct BoxParams {
+    uint8 version;
+    bool twapOverride; // force twap check
+    uint32 twapInterval; // custom global twap
+    uint256 priceThreshold; // price threshold
+  }
+
   /**
    * @notice set pool factory contract address
    * @param factory Address of pearlV3 pool factory
@@ -108,14 +115,12 @@ interface ILiquidBoxManager {
    * @notice Claims collected management fees and transfers them to the specified address.
    * @dev This function can only be called by the owner of the contract.
    * @param box The address to which the fee will be collected.
-   * @param to The address to which the collected fees will be transferred.
    * @return collectedfees0 The amount of collected fees denominated in token0.
    * @return collectedfees1 The amount of collected fees denominated in token1.
    * @return collectedFeesOnEmission The amount of collected fees on reward emission from gauge.
    */
   function claimManagementFees(
-    address box,
-    address to
+    address box
   )
     external
     returns (
@@ -226,10 +231,4 @@ interface ILiquidBoxManager {
     uint256 deposit0,
     uint256 deposit1
   ) external view returns (uint256 required0, uint256 required1);
-
-  function boxDepositCallback(
-    uint256 amount0Owed,
-    uint256 amount1Owed,
-    address payer
-  ) external;
 }

@@ -11,7 +11,7 @@ interface IVoter {
    * @notice Retrieves the address of the Voting Escrow contract.
    * @return The address of the Voting Escrow contract.
    */
-  function _ve() external view returns (address);
+  function ve() external view returns (address);
 
   /**
    * @notice Retrieves the address of the governor contract.
@@ -89,9 +89,9 @@ interface IVoter {
 
   /**
    * @notice Distributes rewards to a specific gauge.
-   * @param _gauge The address of the gauge.
+   * @param _gauge The array of addresses of the gauges.
    */
-  function distribute(address _gauge) external;
+  function distribute(address[] memory _gauge) external;
 
   /**
    * @notice Distributes rewards to all gauges.
@@ -110,6 +110,13 @@ interface IVoter {
    * @param _gauges The addresses of the gauges.
    */
   function distributeFees(address[] memory _gauges) external;
+
+  /**
+   * @notice Distributes rewards within a specified range of gauges.
+   * @param start The starting index of the gauges.
+   * @param finish The ending index of the gauges.
+   */
+  function distributeFees(uint256 start, uint256 finish) external;
 
   /**
    * @notice Retrieves the address of the internal bribe contract for a specific gauge.

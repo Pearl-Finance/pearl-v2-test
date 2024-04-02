@@ -6,7 +6,11 @@ import "openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 contract ERC20Mintable is ERC20Upgradeable {
     uint8 private _decimals;
 
-    function initialize(string memory name, string memory symbol, uint8 decimals_) external initializer {
+    function initialize(
+        string memory name,
+        string memory symbol,
+        uint8 decimals_
+    ) external initializer {
         __ERC20_init(name, symbol);
         _decimals = decimals_;
     }

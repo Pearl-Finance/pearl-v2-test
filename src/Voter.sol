@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.20;
+pragma solidity ^0.8.20;
 
 import "openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
@@ -22,18 +22,21 @@ import "./interfaces/IGaugeV2Factory.sol";
 import "./interfaces/dex/IPearlV2Pool.sol";
 import "./interfaces/dex/IPearlV2Factory.sol";
 import "./Epoch.sol";
-import {console2 as console} from "forge-std/Test.sol";
 
-contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeable {
+contract Voter is
+    IVoter,
+    NonblockingLzAppUpgradeable,
+    ReentrancyGuardUpgradeable
+{
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     bool public immutable isMainChain;
 
-    uint256 constant PRECISION = 10 ** 18;
+    uint256 public constant PRECISION = 10 ** 18;
 
     address public ustb;
-    address public _ve; // the ve token that governs these contracts
+    address public ve; // the ve token that governs these contracts
     address public factory; // the PairFactory
     address public base;
     address public gaugefactory;
@@ -74,11 +77,11 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     mapping(address => uint256) public claimable;
 
     event Whitelisted(address indexed whitelister, address indexed token);
-    event LzAdapterParamsEvent(uint256 limit);
-    event MinterChanged(address _minter);
-    event EpochCotrollerChanged(address epochController);
-    event GovernorChanged(address governor);
-    event EmergencyCouncilChanged(address emergencyCouncil);
+    event LzAdapterParamsEvent(uint256 indexed limit);
+    event MinterChanged(address indexed _minter);
+    event EpochCotrollerChanged(address indexed epochController);
+    event GovernorChanged(address indexed governor);
+    event EmergencyCouncilChanged(address indexed emergencyCouncil);
 
     event GaugeCreated(
         address indexed gauge,
@@ -91,13 +94,34 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     event GaugeRevived(address indexed gauge);
     event Voted(address indexed voter, uint256 weight);
     event Abstained(address indexed voter, uint256 weight);
-    event Deposit(address indexed lp, address indexed gauge, uint256 tokenId, uint256 amount);
-    event Withdraw(address indexed lp, address indexed gauge, uint256 tokenId, uint256 amount);
-    event NotifyReward(address indexed sender, address indexed reward, uint256 amount);
-    event DistributeReward(address indexed sender, address indexed gauge, uint256 amount);
+    event Deposit(
+        address indexed lp,
+        address indexed gauge,
+        uint256 tokenId,
+        uint256 amount
+    );
+    event Withdraw(
+        address indexed lp,
+        address indexed gauge,
+        uint256 tokenId,
+        uint256 amount
+    );
+    event NotifyReward(
+        address indexed sender,
+        address indexed reward,
+        uint256 amount
+    );
+    event DistributeReward(
+        address indexed sender,
+        address indexed gauge,
+        uint256 amount
+    );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(uint256 _mainChainId, address _lzEndpoint) NonblockingLzAppUpgradeable(_lzEndpoint) {
+    constructor(
+        uint256 _mainChainId,
+        address _lzEndpoint
+    ) NonblockingLzAppUpgradeable(_lzEndpoint) {
         isMainChain = _mainChainId == block.chainid;
         _disableInitializers();
     }
@@ -115,9 +139,13 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         uint16 _lzChainId
     ) public initializer {
         require(
-            _initialOwner != address(0) && _lockedToken != address(0) && _emergencyCouncil != address(0)
-                && _pearlV2Factory != address(0) && _gaugesFactory != address(0) && _bribeFactory != address(0)
-                && _ustb != address(0),
+            _initialOwner != address(0) &&
+                _lockedToken != address(0) &&
+                _emergencyCouncil != address(0) &&
+                _pearlV2Factory != address(0) &&
+                _gaugesFactory != address(0) &&
+                _bribeFactory != address(0) &&
+                _ustb != address(0),
             "!zero address"
         );
 
@@ -132,8 +160,11 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
 
         // VotingEscrow is only deployed on main chain
         if (__ve != address(0)) {
-            _ve = __ve;
-            require(_lockedToken == address(IVotingEscrow(__ve).lockedToken()), "!locked token");
+            ve = __ve;
+            require(
+                _lockedToken == address(IVotingEscrow(__ve).lockedToken()),
+                "!locked token"
+            );
         }
 
         factory = _pearlV2Factory;
@@ -143,7 +174,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         ustb = _ustb;
         lzMainChainId = _lzMainChainId; //set layerzero chain id for protocol mainChain
         lzChainId = _lzChainId; //set layerzero chain id for protocol mainChain
-        defaultAdapterParams = abi.encodePacked(uint16(1), uint256(30000000)); //set layerZero adapter params for native fees
+        defaultAdapterParams = abi.encodePacked(uint16(1), uint256(3_000_000)); //set layerZero adapter params for native fees
     }
 
     modifier onlyGovernor() {
@@ -171,7 +202,10 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     function _checkDistribution() internal view {
         require(epochController != address(0), "!epochController");
         //voting is not allowed while distribution is running
-        require(!IEpochController(epochController).checkDistribution(), "Voting is not allowed during distribution");
+        require(
+            !IEpochController(epochController).checkDistribution(),
+            "Voting is not allowed during distribution"
+        );
     }
 
     function _updateFor(address _gauge) internal {
@@ -198,21 +232,28 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         uint256 _poolVoteCnt = _poolVote.length;
         uint256 _totalWeight = 0;
 
-        for (uint256 i = 0; i < _poolVoteCnt; i++) {
+        for (uint256 i = 0; i < _poolVoteCnt; ) {
             address _pool = _poolVote[i];
             uint256 _votes = votes[account][_pool];
 
             if (_votes != 0) {
                 weights[_pool] -= _votes;
                 votes[account][_pool] -= _votes;
-                if (_votes > 0) {
-                    IBribe(internal_bribes[gauges[_pool]])._withdraw(uint256(_votes), account);
-                    IBribe(external_bribes[gauges[_pool]])._withdraw(uint256(_votes), account);
-                    _totalWeight += _votes;
-                } else {
-                    _totalWeight -= _votes;
-                }
+
+                IBribe(internal_bribes[gauges[_pool]])._withdraw(
+                    uint256(_votes),
+                    account
+                );
+                IBribe(external_bribes[gauges[_pool]])._withdraw(
+                    uint256(_votes),
+                    account
+                );
+                _totalWeight += _votes;
+
                 emit Abstained(account, _votes);
+            }
+            unchecked {
+                i++;
             }
         }
         totalWeight -= _totalWeight;
@@ -224,7 +265,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         address[] memory _poolVote = poolVote[account];
         uint256 _poolCnt = _poolVote.length;
         uint256[] memory _weights = new uint256[](_poolCnt);
-        for (uint256 i = _poolCnt; i != 0;) {
+        for (uint256 i = _poolCnt; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -233,29 +274,44 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         _vote(account, _poolVote, _weights);
     }
 
-    function _vote(address account, address[] memory _poolVote, uint256[] memory _weights) internal {
+    function _distributeFess(address _gauge) internal {
+        if (
+            isAlive[_gauge] &&
+            IGaugeV2(_gauge).isMainChain() &&
+            IGaugeV2(_gauge).isForPair()
+        ) {
+            IGaugeV2(_gauge).claimFees();
+        }
+    }
+
+    function _vote(
+        address account,
+        address[] memory _poolVote,
+        uint256[] memory _weights
+    ) internal {
         _reset(account);
         uint256 _poolCnt = _poolVote.length;
-        uint256 _weight = IVotingEscrow(_ve).getVotes(account);
+        uint256 _weight = IVotingEscrow(ve).getVotes(account);
         uint256 _totalVoteWeight = 0;
         uint256 _usedWeight = 0;
 
-        for (uint256 i = _poolCnt; i != 0;) {
+        for (uint256 i = _poolCnt; i != 0; ) {
             unchecked {
                 --i;
             }
             _totalVoteWeight += _weights[i];
         }
 
-        for (uint256 i = _poolCnt; i != 0;) {
+        for (uint256 i = _poolCnt; i != 0; ) {
             unchecked {
                 --i;
             }
             address _pool = _poolVote[i];
             address _gauge = gauges[_pool];
 
-            if (isGauge[_gauge]) {
-                uint256 _poolWeight = (_weights[i] * _weight) / _totalVoteWeight;
+            if (isGauge[_gauge] && isAlive[_gauge]) {
+                uint256 _poolWeight = (_weights[i] * _weight) /
+                    _totalVoteWeight;
                 require(votes[account][_pool] == 0, "zero votes");
                 require(_poolWeight != 0, "zero weight");
 
@@ -264,14 +320,26 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
                 weights[_pool] += _poolWeight;
                 votes[account][_pool] += _poolWeight;
 
-                IBribe(internal_bribes[_gauge])._deposit(uint256(_poolWeight), account);
+                IBribe(internal_bribes[_gauge])._deposit(
+                    uint256(_poolWeight),
+                    account
+                );
 
-                IBribe(external_bribes[_gauge])._deposit(uint256(_poolWeight), account);
+                IBribe(external_bribes[_gauge])._deposit(
+                    uint256(_poolWeight),
+                    account
+                );
                 _usedWeight += _poolWeight;
                 emit Voted(account, _poolWeight);
             }
         }
-        if (_usedWeight != 0) voted[account] = true;
+
+        if (_usedWeight != 0) {
+            voted[account] = true;
+        } else {
+            voted[account] = false;
+        }
+
         totalWeight += _usedWeight;
         usedWeights[account] = _usedWeight;
     }
@@ -283,15 +351,23 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     // VE approval helpers
-    function _isAuthorized(address owner, address spender, uint256 tokenId) private view returns (bool) {
-        return spender != address(0)
-            && (
-                owner == spender || IERC721(_ve).isApprovedForAll(owner, spender)
-                    || IERC721(_ve).getApproved(tokenId) == spender
-            );
+    function _isAuthorized(
+        address owner,
+        address spender,
+        uint256 tokenId
+    ) private view returns (bool) {
+        return
+            spender != address(0) &&
+            (owner == spender ||
+                IERC721(ve).isApprovedForAll(owner, spender) ||
+                IERC721(ve).getApproved(tokenId) == spender);
     }
 
-    function _checkAuthorized(address owner, address spender, uint256 tokenId) private view {
+    function _checkAuthorized(
+        address owner,
+        address spender,
+        uint256 tokenId
+    ) private view {
         if (!_isAuthorized(owner, spender, tokenId)) {
             if (owner == address(0)) {
                 revert("ERC721: owner query for nonexistent token");
@@ -305,8 +381,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         uint16 _LzPoolChainId,
         address _pool,
         address token0,
-        address token1,
-        string memory _bribeType
+        address token1
     ) internal returns (address) {
         require(gauges[_pool] == address(0), "exists");
         require(ustb != address(0), "!ustb ");
@@ -316,31 +391,43 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         uint16 _lzMainChainId = lzMainChainId;
 
         //create internal bribe contract to collect LP fees
-        string memory _type = string.concat("Pearl LP Fees: ", _bribeType);
+        string memory _type = "Pearl LP Fees";
         _internal_bribe = IBribeFactory(bribefactory).createBribe(
-            _lzMainChainId, _LzPoolChainId, _pool, owner(), token0, token1, _type
+            _lzMainChainId,
+            _LzPoolChainId,
+            _pool,
+            owner(),
+            token0,
+            token1,
+            _type
         );
         isBribe[_internal_bribe] = true;
 
         //create external bribe
-        _type = string.concat("Pearl Bribes: ", _bribeType);
+        _type = "Pearl Bribes";
         _external_bribe = IBribeFactory(bribefactory).createBribe(
-            _lzMainChainId, _LzPoolChainId, _pool, owner(), token0, token1, _type
+            _lzMainChainId,
+            _LzPoolChainId,
+            _pool,
+            owner(),
+            token0,
+            token1,
+            _type
         );
         isBribe[_external_bribe] = true;
 
-        (address _gauge, address _almGauge) = IGaugeV2Factory(gaugefactory).createGauge(
-            _lzMainChainId,
-            _LzPoolChainId,
-            factory,
-            _pool,
-            base, //rewardToken
-            address(this), //Distribution
-            _internal_bribe,
-            true
-        );
+        (address _gauge, address _almGauge) = IGaugeV2Factory(gaugefactory)
+            .createGauge(
+                _lzMainChainId,
+                _LzPoolChainId,
+                factory,
+                _pool,
+                base, //rewardToken
+                address(this), //Distribution
+                _internal_bribe,
+                true
+            );
 
-        // IERC20Upgradeable(base).forceApprove(_gauge, type(uint256).max);
         internal_bribes[_gauge] = _internal_bribe;
         external_bribes[_gauge] = _external_bribe;
         gauges[_pool] = _gauge;
@@ -351,7 +438,13 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         supplyIndex[_gauge] = index;
         pools.push(_pool);
 
-        emit GaugeCreated(_gauge, msg.sender, _internal_bribe, _external_bribe, _pool);
+        emit GaugeCreated(
+            _gauge,
+            msg.sender,
+            _internal_bribe,
+            _external_bribe,
+            _pool
+        );
 
         return _gauge;
     }
@@ -367,7 +460,10 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
      * @param _adapterParams The adapter parameters required for Layerzero.
      * @return _gauge The address of the newly created gauge.
      */
-    function createGauge(address _pool, bytes memory _adapterParams) external payable returns (address _gauge) {
+    function createGauge(
+        address _pool,
+        bytes memory _adapterParams
+    ) external payable returns (address _gauge) {
         bool isPair = IPearlV2Factory(factory).isPair(_pool);
         require(isPair, "!pair");
 
@@ -377,28 +473,30 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         if (msg.sender != governor) {
             // gov can create for any pool, even non-Pearl pairs
             require(isPair, "!_pool");
-            // require(isWhitelisted[tokenA] && isWhitelisted[tokenB], "!whitelisted");
-            require(ustb == address(0) || tokenA == ustb || tokenB == ustb, "!ustb");
+            require(tokenA == ustb || tokenB == ustb, "!ustb");
         }
 
-        string memory _bribeType = string(
-            abi.encodePacked(
-                "aMM-", IERC20MetadataUpgradeable(tokenA).symbol(), "/", IERC20MetadataUpgradeable(tokenB).symbol()
-            )
-        );
-
         //create gauge
-        _gauge = _createGauge(lzChainId, _pool, tokenA, tokenB, _bribeType);
+        _gauge = _createGauge(lzChainId, _pool, tokenA, tokenB);
 
         // Set the gauge for reward distribution
         IPearlV2Factory(factory).setPoolGauge(_pool, _gauge);
 
         //notify main chain chain to create the child gauge for the pool
         if (!isMainChain) {
-            _adapterParams = _adapterParams.length > 2 ? _adapterParams : defaultAdapterParams;
+            _adapterParams = _adapterParams.length > 2
+                ? _adapterParams
+                : defaultAdapterParams;
             bytes memory _payload = abi.encode(_pool);
 
-            _lzSend(lzMainChainId, _payload, payable(msg.sender), address(0x0), _adapterParams, msg.value);
+            _lzSend(
+                lzMainChainId,
+                _payload,
+                payable(msg.sender),
+                address(0x0),
+                _adapterParams,
+                msg.value
+            );
         }
     }
 
@@ -411,7 +509,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         address _pool = abi.decode(payload, (address));
         //add pool to lzPool list
         lzPools.push(_pool);
-        _createGauge(srcChainId, _pool, address(0), address(0), "aMM-USTB");
+        _createGauge(srcChainId, _pool, address(0), address(0));
     }
 
     function reset() external nonReentrant isAllowed {
@@ -426,16 +524,20 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     function poke(address account) external nonReentrant isAllowed {
-        require(msg.sender == _ve, "!ve");
-        uint256 lastVotedEpoch = (lastVoted[account] / EPOCH_DURATION) * EPOCH_DURATION;
+        require(msg.sender == ve, "!ve");
+        uint256 lastVotedEpoch = (lastVoted[account] / EPOCH_DURATION) *
+            EPOCH_DURATION;
         uint256 currentEpoch = IMinter(minter).active_period();
         if (lastVotedEpoch < currentEpoch) return;
         _poke(account);
     }
 
-    function vote(address[] memory _poolVote, uint256[] memory _weights) external nonReentrant isAllowed {
+    function vote(
+        address[] memory _poolVote,
+        uint256[] memory _weights
+    ) external nonReentrant isAllowed {
         address account = msg.sender;
-        require(_poolVote.length == _weights.length);
+        require(_poolVote.length == _weights.length, "length mismatch");
         lastVoted[account] = block.timestamp;
         _vote(account, _poolVote, _weights);
     }
@@ -459,8 +561,11 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         emit GaugeRevived(_gauge);
     }
 
-    function claimBribes(address[] memory _bribes, address[][] memory _tokens) external isClaimAllowed {
-        for (uint256 i = _bribes.length; i != 0;) {
+    function claimBribes(
+        address[] memory _bribes,
+        address[][] memory _tokens
+    ) external isClaimAllowed {
+        for (uint256 i = _bribes.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -468,8 +573,11 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         }
     }
 
-    function claimFees(address[] memory _fees, address[][] memory _tokens) external isClaimAllowed {
-        for (uint256 i = _fees.length; i != 0;) {
+    function claimFees(
+        address[] memory _fees,
+        address[][] memory _tokens
+    ) external isClaimAllowed {
+        for (uint256 i = _fees.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -478,17 +586,25 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     function distributeFees(address[] memory _gauges) external {
-        for (uint256 i = _gauges.length; i != 0;) {
+        for (uint256 i = _gauges.length; i != 0; ) {
             unchecked {
                 --i;
             }
-            if (IGaugeV2(_gauges[i]).isForPair()) {
-                IGaugeV2(_gauges[i]).claimFees();
+            _distributeFess(_gauges[i]);
+        }
+    }
+
+    function distributeFees(uint256 start, uint256 finish) public {
+        for (uint256 x = start; x < finish; ) {
+            address _gauge = gauges[pools[x]];
+            _distributeFess(_gauge);
+            unchecked {
+                ++x;
             }
         }
     }
 
-    function distribute(address _gauge) public nonReentrant {
+    function _distribute(address _gauge) internal {
         IMinter(minter).update_period();
         uint256 lastTimestamp = gaugesDistributionTimestamp[_gauge];
         uint256 currentTimestamp = IMinter(minter).active_period();
@@ -500,7 +616,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
             if (_claimable != 0 && isAlive[_gauge]) {
                 claimable[_gauge] = 0;
                 gaugesDistributionTimestamp[_gauge] = currentTimestamp;
-                IERC20Upgradeable(base).safeIncreaseAllowance(_gauge, _claimable);
+                IERC20Upgradeable(base).forceApprove(_gauge, _claimable);
                 IGaugeV2(_gauge).notifyRewardAmount(base, _claimable);
                 emit DistributeReward(msg.sender, _gauge, _claimable);
             }
@@ -511,44 +627,38 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         distribute(0, pools.length);
     }
 
-    function distribute(uint256 start, uint256 finish) public {
-        for (uint256 x = start; x < finish;) {
-            distribute(gauges[pools[x]]);
+    function distribute(uint256 start, uint256 finish) public nonReentrant {
+        for (uint256 x = start; x < finish; ) {
+            _distribute(gauges[pools[x]]);
             unchecked {
                 ++x;
             }
         }
     }
 
-    function distribute(address[] memory _gauges) external {
-        for (uint256 x = _gauges.length; x != 0;) {
+    function distribute(address[] memory _gauges) external nonReentrant {
+        for (uint256 x = _gauges.length; x != 0; ) {
             unchecked {
                 --x;
             }
-            distribute(_gauges[x]);
+            _distribute(_gauges[x]);
         }
     }
 
-    function emitWithdraw(uint256 tokenId, address account, uint256 amount) external {
-        require(isGauge[msg.sender]);
-        emit Withdraw(account, msg.sender, tokenId, amount);
-    }
-
     function notifyRewardAmount(uint256 amount) external {
+        require(msg.sender == minter, "!minter");
         require(totalWeight != 0, "no votes");
-        IERC20Upgradeable(base).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20Upgradeable(base).safeTransferFrom(
+            msg.sender,
+            address(this),
+            amount
+        );
         uint256 _ratio = (amount * PRECISION) / totalWeight; // PRECISION adjustment is removed during claim
         if (_ratio != 0) {
             index += _ratio;
         }
         emit NotifyReward(msg.sender, base, amount);
     }
-
-    // function increaseGaugeApprovals(address _gauge) external {
-    //   require(msg.sender == emergencyCouncil);
-    //   require(isGauge[_gauge] = true);
-    //   IERC20Upgradeable(base).forceApprove(_gauge, type(uint256).max);
-    // }
 
     //=======================  SET  =========================================
 
@@ -558,14 +668,18 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     function setEmergencyCouncil(address _council) public {
-        require(msg.sender == emergencyCouncil);
+        require(msg.sender == emergencyCouncil, "sender not emergency council");
         emergencyCouncil = _council;
         emit EmergencyCouncilChanged(_council);
     }
 
-    function setNewBribe(address _gauge, address _internal, address _external) external {
-        require(msg.sender == emergencyCouncil);
-        require(isGauge[_gauge] = true);
+    function setNewBribe(
+        address _gauge,
+        address _internal,
+        address _external
+    ) external {
+        require(msg.sender == emergencyCouncil, "sender not emergency council");
+        require(isGauge[_gauge], "not gauge");
         internal_bribes[_gauge] = _internal;
         external_bribes[_gauge] = _external;
     }
@@ -575,13 +689,15 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         emit MinterChanged(_minter);
     }
 
-    function setEpochController(address _epochControllerAddress) external onlyGovernor {
+    function setEpochController(
+        address _epochControllerAddress
+    ) external onlyGovernor {
         epochController = _epochControllerAddress;
         emit EpochCotrollerChanged(_epochControllerAddress);
     }
 
     function whitelist(address[] memory _token) public onlyGovernor {
-        for (uint256 i = _token.length; i != 0;) {
+        for (uint256 i = _token.length; i != 0; ) {
             unchecked {
                 --i;
             }
@@ -590,7 +706,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     function setLzAdapterParams(uint256 _limit) public onlyOwner {
-        require(_limit >= 200000, "gasLimit");
+        require(_limit >= 200_000, "gasLimit");
         defaultAdapterParams = abi.encodePacked(uint16(1), _limit);
         emit LzAdapterParamsEvent(_limit);
     }
@@ -618,21 +734,32 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     function hasVoted(address _account) external view returns (bool) {
-        return voted[_account] && lastVoted[_account] >= IMinter(minter).active_period();
+        return
+            voted[_account] &&
+            lastVoted[_account] >= IMinter(minter).active_period();
     }
 
-    function estimateSendFee(address _pool, bool _useZro, bytes memory _adapterParams)
-        public
-        view
-        returns (uint256 nativeFee, uint256 zroFee)
-    {
+    function estimateSendFee(
+        address _pool,
+        bool _useZro,
+        bytes memory _adapterParams
+    ) public view returns (uint nativeFee, uint zroFee) {
         bytes memory _payload = abi.encode(_pool);
         uint16 _dstChainId = uint16(lzMainChainId);
         bytes memory trustedRemote = getTrustedRemote(_dstChainId);
-        (address _dstAddress,) = abi.decode(trustedRemote, (address, address));
+        (address _dstAddress, ) = abi.decode(trustedRemote, (address, address));
 
-        _adapterParams = _adapterParams.length > 2 ? _adapterParams : defaultAdapterParams;
+        _adapterParams = _adapterParams.length > 2
+            ? _adapterParams
+            : defaultAdapterParams;
 
-        return lzEndpoint.estimateFees(_dstChainId, _dstAddress, _payload, _useZro, _adapterParams);
+        return
+            lzEndpoint.estimateFees(
+                _dstChainId,
+                _dstAddress,
+                _payload,
+                _useZro,
+                _adapterParams
+            );
     }
 }

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.20;
-
+pragma solidity ^0.8.20;
 import {IERC20, SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Initializable} from "openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -57,7 +56,12 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param claim_epoch The epoch at which the claim was made.
      * @param max_epoch The maximum epoch for claiming tokens.
      */
-    event Claimed(uint256 tokenId, uint256 amount, uint256 claim_epoch, uint256 max_epoch);
+    event Claimed(
+        uint256 indexed tokenId,
+        uint256 amount,
+        uint256 claim_epoch,
+        uint256 max_epoch
+    );
 
     /**
      * @dev Emitted when a user withdraws ERC20 tokens.
@@ -65,9 +69,14 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param owner The address of the user initiating the withdrawal.
      * @param amount The amount of ERC20 tokens withdrawn by the user.
      */
-    event Withdraw(address token, address owner, uint256 amount);
+    event Withdraw(address indexed token, address owner, uint256 amount);
 
     error NoClaimableAmount();
+
+    event OwnerSet(address indexed owner);
+    event DepositorSet(address indexed depositor);
+    error RewardsDistributor_NoWithdrawableAmount();
+    error RewardsDistributor_CannotUpdateRewardForPastEpochs();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -80,7 +89,11 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      *      This function can only be called once, due to the initializer modifier from OpenZeppelin's upgradeable contracts library.
      * @param _votingEscrow The address of the voting escrow contract.
      */
-    function initialize(address _intialOwner, address _votingEscrow) public initializer {
+    function initialize(
+        address _intialOwner,
+        address _votingEscrow
+    ) public initializer {
+        require(_intialOwner != address(0), "zero addr");
         IVotingEscrow _ve = IVotingEscrow(_votingEscrow);
         token = address(_ve.lockedToken());
         ve = _ve;
@@ -95,8 +108,9 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param _depositor The address to be set as the depositor.
      */
     function setDepositor(address _depositor) external {
-        require(msg.sender == owner);
+        require(msg.sender == owner, "!owner");
         depositor = _depositor;
+        emit DepositorSet(_depositor);
     }
 
     /**
@@ -111,6 +125,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         require(_owner != address(0), "zeroAddr");
         require(msg.sender == owner, "!owner");
         owner = _owner;
+        emit OwnerSet(_owner);
     }
 
     /**
@@ -128,14 +143,9 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         require(msg.sender == depositor, "!depositor");
         uint256 epochTimestamp = _currentEpochTimestamp();
         uint256 _lastRewardEpochTimestamp = lastRewardEpochTimestamp;
-        if (epochTimestamp < _lastRewardEpochTimestamp) {
-            revert("RewardsDistributor: cannot update reward for past epochs");
-        }
-        if (epochTimestamp == _lastRewardEpochTimestamp) {
-            if (epochReward[epochTimestamp] != 0) {
-                revert("RewardsDistributor: reward for current epoch already set");
-            }
-        }
+        if (epochTimestamp < _lastRewardEpochTimestamp)
+            revert RewardsDistributor_CannotUpdateRewardForPastEpochs();
+
         epochReward[epochTimestamp] += amount;
         _tokenReserve += amount;
         lastRewardEpochTimestamp = epochTimestamp;
@@ -151,7 +161,7 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @return amount The total amount of rewards claimable by the given token ID.
      */
     function claimable(uint256 tokenId) public view returns (uint256 amount) {
-        (amount,) = _claimable(tokenId);
+        (amount, ) = _claimable(tokenId);
     }
 
     /**
@@ -159,7 +169,9 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param tokenId The token ID for which to calculate claimable rewards.
      * @return amount The total amount of rewards claimable by the given token ID.
      */
-    function _claimable(uint256 tokenId) internal view returns (uint256 amount, uint256 lastClaimEpochTimestamp) {
+    function _claimable(
+        uint256 tokenId
+    ) internal view returns (uint256 amount, uint256 lastClaimEpochTimestamp) {
         uint256 lastClaimTimestamp = lastTokenClaim[tokenId];
         if (lastClaimTimestamp == 0) {
             lastClaimTimestamp = ve.getMintingTimestamp(tokenId);
@@ -167,12 +179,29 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         }
         uint256 limit = 50; // max 50 past epochs at a time
         uint256 epochTimestamp = lastRewardEpochTimestamp;
-        lastClaimEpochTimestamp = _toEpochTimestamp(lastClaimTimestamp) + EPOCH_DURATION;
-        while (lastClaimEpochTimestamp < epochTimestamp && (limit != 0 || amount == 0)) {
-            uint256 pastTotalVotingPower = ve.getPastTotalVotingPower(lastClaimEpochTimestamp);
-            if (pastTotalVotingPower != 0) {
-                uint256 pastVotingPower = ve.getPastVotingPower(tokenId, lastClaimEpochTimestamp);
-                amount += (epochReward[lastClaimEpochTimestamp] * pastVotingPower) / pastTotalVotingPower;
+        lastClaimEpochTimestamp =
+            _toEpochTimestamp(lastClaimTimestamp) +
+            EPOCH_DURATION;
+        while (
+            lastClaimEpochTimestamp < epochTimestamp &&
+            (limit != 0 || amount == 0)
+        ) {
+            uint256 pastVotingPower = ve.getPastVotingPower(
+                tokenId,
+                lastClaimEpochTimestamp
+            );
+
+            if (pastVotingPower != 0) {
+                uint256 pastTotalVotingPower = ve.getPastTotalVotingPower(
+                    lastClaimEpochTimestamp
+                );
+
+                if (pastTotalVotingPower != 0) {
+                    amount +=
+                        (epochReward[lastClaimEpochTimestamp] *
+                            pastVotingPower) /
+                        pastTotalVotingPower;
+                }
             }
             unchecked {
                 lastClaimEpochTimestamp += EPOCH_DURATION;
@@ -203,12 +232,11 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         }
 
         _tokenReserve -= amount;
-        bool fullyVested = ve.getRemainingVestingDuration(tokenId) == 0;
-        if (fullyVested) {
+        if (ve.getRemainingVestingDuration(tokenId) == 0) {
             address user = ve.ownerOf(tokenId);
             ve.lockedToken().safeTransfer(user, amount);
         } else {
-            ve.lockedToken().safeIncreaseAllowance(address(ve), amount);
+            ve.lockedToken().forceApprove(address(ve), amount);
             ve.depositFor(tokenId, amount);
         }
 
@@ -225,7 +253,9 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
      * @param _timestamp The timestamp to convert.
      * @return The start timestamp of the epoch in which the given timestamp falls.
      */
-    function _toEpochTimestamp(uint256 _timestamp) internal pure returns (uint256) {
+    function _toEpochTimestamp(
+        uint256 _timestamp
+    ) internal pure returns (uint256) {
         return (_timestamp / EPOCH_DURATION) * EPOCH_DURATION;
     }
 
@@ -254,9 +284,8 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         uint256 withdrawableAmount = IERC20(_token).balanceOf(address(this));
         if (_token == token) {
             withdrawableAmount -= _tokenReserve;
-            if (withdrawableAmount == 0) {
-                revert("RewardsDistributor: no withdrawable amount");
-            }
+            if (withdrawableAmount == 0)
+                revert RewardsDistributor_NoWithdrawableAmount();
         }
         IERC20(_token).safeTransfer(msg.sender, withdrawableAmount);
         emit Withdraw(_token, msg.sender, withdrawableAmount);

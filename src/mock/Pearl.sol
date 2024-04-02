@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.20;
+pragma solidity ^0.8.20;
 
 import "openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 
@@ -43,7 +43,11 @@ contract Pearl is ERC20BurnableUpgradeable {
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public override returns (bool) {
         address spender = _msgSender();
         if (spender != migrator) {
             _spendAllowance(from, spender, amount);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.20;
+pragma solidity ^0.8.20;
 
 import {OwnableUpgradeable} from "openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "layerzerolabs/lzApp/interfaces/ILayerZeroEndpoint.sol";
@@ -9,17 +9,20 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     ILayerZeroEndpoint public immutable lzEndpoint;
 
+    uint public constant DEFAULT_PAYLOAD_SIZE_LIMIT = 1_00_00;
+
     // bytes = abi.encodePacked(remoteAddress, localAddress)
     // this function set the trusted path for the cross-chain communication
     mapping(uint16 => bytes) public trustedRemoteLookup;
 
-    event SetTrustedRemote(uint16 _remoteChainId, bytes _path);
+    event SetTrustedRemote(uint16 indexed _remoteChainId, bytes _path);
 
     /**
      * @param _endpoint Address of the LayerZero endpoint contract.
      * @custom:oz-upgrades-unsafe-allow constructor
      */
     constructor(address _endpoint) {
+        require(_endpoint != address(0), "LzApp: zero addr");
         lzEndpoint = ILayerZeroEndpoint(_endpoint);
     }
 
@@ -32,7 +35,10 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
 
     // _path = abi.encodePacked(remoteAddress, localAddress)
     // this function set the trusted path for the cross-chain communication
-    function setTrustedRemote(uint16 _remoteChainId, bytes calldata _path) external onlyOwner {
+    function setTrustedRemote(
+        uint16 _remoteChainId,
+        bytes calldata _path
+    ) external onlyOwner {
         trustedRemoteLookup[_remoteChainId] = _path;
         emit SetTrustedRemote(_remoteChainId, _path);
     }
@@ -61,10 +67,18 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
         uint256 nativeFee
     ) internal virtual {
         bytes memory trustedRemote = getTrustedRemote(dstChainId);
-        require(trustedRemote.length != 0, "LzApp: destination chain is not a trusted source");
+        require(
+            trustedRemote.length != 0,
+            "LzApp: destination chain is not a trusted source"
+        );
         _checkPayloadSize(dstChainId, payload.length);
         lzEndpoint.send{value: nativeFee}(
-            dstChainId, trustedRemote, payload, refundAddress, zroPaymentAddress, adapterParams
+            dstChainId,
+            trustedRemote,
+            payload,
+            refundAddress,
+            zroPaymentAddress,
+            adapterParams
         );
     }
 
@@ -81,28 +95,39 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
      * @param nonce A unique identifier for the message.
      * @param payload The actual data payload of the message.
      */
-    function lzReceive(uint16 srcChainId, bytes calldata srcAddress, uint64 nonce, bytes calldata payload)
-        public
-        virtual
-        override
-    {
+    function lzReceive(
+        uint16 srcChainId,
+        bytes calldata srcAddress,
+        uint64 nonce,
+        bytes calldata payload
+    ) public virtual override {
         // lzReceive must be called by the endpoint for security
-        require(_msgSender() == address(lzEndpoint), "LzApp: invalid endpoint caller");
+        require(
+            _msgSender() == address(lzEndpoint),
+            "LzApp: invalid endpoint caller"
+        );
 
         bytes memory trustedRemote = trustedRemoteLookup[srcChainId];
         // if will still block the message pathway from (srcChainId, srcAddress). should not receive message from
         // untrusted remote.
         require(
-            srcAddress.length == trustedRemote.length && trustedRemote.length != 0
-                && keccak256(srcAddress) == keccak256(trustedRemote),
+            srcAddress.length == trustedRemote.length &&
+                trustedRemote.length != 0 &&
+                keccak256(srcAddress) == keccak256(trustedRemote),
             "LzApp: invalid source sending contract"
         );
 
         _blockingLzReceive(srcChainId, srcAddress, nonce, payload);
     }
 
-    function _checkPayloadSize(uint16, uint256) internal view virtual {
-        return;
+    function _checkPayloadSize(
+        uint16,
+        uint256 _payloadSize
+    ) internal view virtual {
+        require(
+            _payloadSize <= DEFAULT_PAYLOAD_SIZE_LIMIT,
+            "LzApp: payload size is too large"
+        );
     }
 
     /**
@@ -114,24 +139,34 @@ abstract contract LzAppUpgradeable is OwnableUpgradeable, ILayerZeroReceiver {
      * @param nonce A unique identifier for the message.
      * @param payload The actual data payload of the message.
      */
-    function _blockingLzReceive(uint16 srcChainId, bytes memory srcAddress, uint64 nonce, bytes memory payload)
-        internal
-        virtual;
+    function _blockingLzReceive(
+        uint16 srcChainId,
+        bytes memory srcAddress,
+        uint64 nonce,
+        bytes memory payload
+    ) internal virtual;
 
-    function isTrustedRemote(uint16 _srcChainId, bytes calldata _srcAddress) external view returns (bool) {
+    function isTrustedRemote(
+        uint16 _srcChainId,
+        bytes calldata _srcAddress
+    ) external view returns (bool) {
         bytes memory trustedSource = trustedRemoteLookup[_srcChainId];
         return keccak256(trustedSource) == keccak256(_srcAddress);
     }
 
-    function getTrustedRemote(uint16 _chainId) public view returns (bytes memory trustedRemote) {
+    function getTrustedRemote(
+        uint16 _chainId
+    ) public view returns (bytes memory trustedRemote) {
         trustedRemote = trustedRemoteLookup[_chainId];
     }
 
     // generic config for LayerZero user Application
-    function setConfig(uint16 _version, uint16 _chainId, uint256 _configType, bytes calldata _config)
-        external
-        onlyOwner
-    {
+    function setConfig(
+        uint16 _version,
+        uint16 _chainId,
+        uint _configType,
+        bytes calldata _config
+    ) external onlyOwner {
         lzEndpoint.setConfig(_version, _chainId, _configType, _config);
     }
 }

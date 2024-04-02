@@ -30,7 +30,9 @@ library PositionValue {
       sqrtRatioX96
     );
     (uint256 amount0Fee, uint256 amount1Fee) = fees(positionManager, tokenId);
-    return (amount0Principal + amount0Fee, amount1Principal + amount1Fee);
+    unchecked {
+      return (amount0Principal + amount0Fee, amount1Principal + amount1Fee);
+    }
   }
 
   /// @notice Calculates the principal (currently acting as liquidity) owed to the token owner in the event

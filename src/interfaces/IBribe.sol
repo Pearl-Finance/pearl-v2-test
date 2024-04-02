@@ -27,6 +27,26 @@ interface IBribe {
   function minter() external view returns (address);
 
   /**
+   * @notice Initializes the gauge with the provided parameters.
+   * @param isMainChain bool for main chain
+   * @param lzMainChainId The layerzero ChainId of the main chain.
+   * @param lzPoolChainId The layerzero ChainId of the pool.
+   * @param owner The address of the Owner contract.
+   * @param voter The address of the Voter contract.
+   * @param bribeFactory The address of the BribeFactory contract.
+   * @param _type The bribe contract type
+   */
+  function initialize(
+    bool isMainChain,
+    uint16 lzMainChainId,
+    uint16 lzPoolChainId,
+    address owner,
+    address voter,
+    address bribeFactory,
+    string memory _type
+  ) external;
+
+  /**
    * @notice Deposits vote into the bribe for a specified account.
    * @param amount The amount of vote to deposit.
    * @param account The account to deposit for.
@@ -105,13 +125,11 @@ interface IBribe {
    *         or just recover some ERC20 from the contract.
    * @dev    Be careful --> if isRecoverERC20AndUpdateData is set to false then getReward() at last epoch will fail because some reward are missing!
    *         Think about setting isRecoverERC20AndUpdateData as true.
-   * @param tokenAddress The address of the ERC20 token to recover.
-   * @param tokenAmount The amount of tokens to recover.
+   * @param data token(s) and amount(s) to recover.
    * @param isRecoverERC20AndUpdateData indicator to updated given bribe or not while recovering some ERC20 from the contract.
    */
   function emergencyRecoverERC20AndRecoverData(
-    address tokenAddress,
-    uint256 tokenAmount,
+    bytes calldata data,
     bool isRecoverERC20AndUpdateData
   ) external;
 
@@ -184,4 +202,6 @@ interface IBribe {
     address _target,
     bytes calldata _data
   ) external;
+
+  function addRewards(address[] memory _rewardsToken) external;
 }
