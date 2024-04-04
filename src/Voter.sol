@@ -23,11 +23,7 @@ import "./interfaces/dex/IPearlV2Pool.sol";
 import "./interfaces/dex/IPearlV2Factory.sol";
 import "./Epoch.sol";
 
-contract Voter is
-    IVoter,
-    NonblockingLzAppUpgradeable,
-    ReentrancyGuardUpgradeable
-{
+contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
@@ -55,8 +51,8 @@ contract Voter is
     address[] public pools; // all pools viable for incentives
     address[] public lzPools; // all pools viable for incentives
 
-    uint256 internal index;
-    mapping(address => uint256) internal supplyIndex;
+    uint256 public index;
+    mapping(address => uint256) public supplyIndex;
 
     mapping(address => address) public gauges; // pool => gauge
     mapping(address => address) public gaugesALM; // pool => alm
@@ -94,34 +90,13 @@ contract Voter is
     event GaugeRevived(address indexed gauge);
     event Voted(address indexed voter, uint256 weight);
     event Abstained(address indexed voter, uint256 weight);
-    event Deposit(
-        address indexed lp,
-        address indexed gauge,
-        uint256 tokenId,
-        uint256 amount
-    );
-    event Withdraw(
-        address indexed lp,
-        address indexed gauge,
-        uint256 tokenId,
-        uint256 amount
-    );
-    event NotifyReward(
-        address indexed sender,
-        address indexed reward,
-        uint256 amount
-    );
-    event DistributeReward(
-        address indexed sender,
-        address indexed gauge,
-        uint256 amount
-    );
+    event Deposit(address indexed lp, address indexed gauge, uint256 tokenId, uint256 amount);
+    event Withdraw(address indexed lp, address indexed gauge, uint256 tokenId, uint256 amount);
+    event NotifyReward(address indexed sender, address indexed reward, uint256 amount);
+    event DistributeReward(address indexed sender, address indexed gauge, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(
-        uint256 _mainChainId,
-        address _lzEndpoint
-    ) NonblockingLzAppUpgradeable(_lzEndpoint) {
+    constructor(uint256 _mainChainId, address _lzEndpoint) NonblockingLzAppUpgradeable(_lzEndpoint) {
         isMainChain = _mainChainId == block.chainid;
         _disableInitializers();
     }
@@ -139,13 +114,9 @@ contract Voter is
         uint16 _lzChainId
     ) public initializer {
         require(
-            _initialOwner != address(0) &&
-                _lockedToken != address(0) &&
-                _emergencyCouncil != address(0) &&
-                _pearlV2Factory != address(0) &&
-                _gaugesFactory != address(0) &&
-                _bribeFactory != address(0) &&
-                _ustb != address(0),
+            _initialOwner != address(0) && _lockedToken != address(0) && _emergencyCouncil != address(0)
+                && _pearlV2Factory != address(0) && _gaugesFactory != address(0) && _bribeFactory != address(0)
+                && _ustb != address(0),
             "!zero address"
         );
 
@@ -161,10 +132,7 @@ contract Voter is
         // VotingEscrow is only deployed on main chain
         if (__ve != address(0)) {
             ve = __ve;
-            require(
-                _lockedToken == address(IVotingEscrow(__ve).lockedToken()),
-                "!locked token"
-            );
+            require(_lockedToken == address(IVotingEscrow(__ve).lockedToken()), "!locked token");
         }
 
         factory = _pearlV2Factory;
@@ -202,10 +170,7 @@ contract Voter is
     function _checkDistribution() internal view {
         require(epochController != address(0), "!epochController");
         //voting is not allowed while distribution is running
-        require(
-            !IEpochController(epochController).checkDistribution(),
-            "Voting is not allowed during distribution"
-        );
+        require(!IEpochController(epochController).checkDistribution(), "Voting is not allowed during distribution");
     }
 
     function _updateFor(address _gauge) internal {
@@ -232,7 +197,7 @@ contract Voter is
         uint256 _poolVoteCnt = _poolVote.length;
         uint256 _totalWeight = 0;
 
-        for (uint256 i = 0; i < _poolVoteCnt; ) {
+        for (uint256 i = 0; i < _poolVoteCnt;) {
             address _pool = _poolVote[i];
             uint256 _votes = votes[account][_pool];
 
@@ -240,14 +205,8 @@ contract Voter is
                 weights[_pool] -= _votes;
                 votes[account][_pool] -= _votes;
 
-                IBribe(internal_bribes[gauges[_pool]])._withdraw(
-                    uint256(_votes),
-                    account
-                );
-                IBribe(external_bribes[gauges[_pool]])._withdraw(
-                    uint256(_votes),
-                    account
-                );
+                IBribe(internal_bribes[gauges[_pool]])._withdraw(uint256(_votes), account);
+                IBribe(external_bribes[gauges[_pool]])._withdraw(uint256(_votes), account);
                 _totalWeight += _votes;
 
                 emit Abstained(account, _votes);
@@ -265,7 +224,7 @@ contract Voter is
         address[] memory _poolVote = poolVote[account];
         uint256 _poolCnt = _poolVote.length;
         uint256[] memory _weights = new uint256[](_poolCnt);
-        for (uint256 i = _poolCnt; i != 0; ) {
+        for (uint256 i = _poolCnt; i != 0;) {
             unchecked {
                 --i;
             }
@@ -275,34 +234,27 @@ contract Voter is
     }
 
     function _distributeFess(address _gauge) internal {
-        if (
-            isAlive[_gauge] &&
-            IGaugeV2(_gauge).isMainChain() &&
-            IGaugeV2(_gauge).isForPair()
-        ) {
+        if (isAlive[_gauge] && IGaugeV2(_gauge).isMainChain() && IGaugeV2(_gauge).isForPair()) {
             IGaugeV2(_gauge).claimFees();
         }
     }
 
-    function _vote(
-        address account,
-        address[] memory _poolVote,
-        uint256[] memory _weights
-    ) internal {
+    function _vote(address account, address[] memory _poolVote, uint256[] memory _weights) internal {
         _reset(account);
         uint256 _poolCnt = _poolVote.length;
         uint256 _weight = IVotingEscrow(ve).getVotes(account);
         uint256 _totalVoteWeight = 0;
         uint256 _usedWeight = 0;
 
-        for (uint256 i = _poolCnt; i != 0; ) {
+        for (uint256 i = _poolCnt; i != 0;) {
             unchecked {
                 --i;
             }
+
             _totalVoteWeight += _weights[i];
         }
 
-        for (uint256 i = _poolCnt; i != 0; ) {
+        for (uint256 i = _poolCnt; i != 0;) {
             unchecked {
                 --i;
             }
@@ -310,8 +262,8 @@ contract Voter is
             address _gauge = gauges[_pool];
 
             if (isGauge[_gauge] && isAlive[_gauge]) {
-                uint256 _poolWeight = (_weights[i] * _weight) /
-                    _totalVoteWeight;
+                uint256 _poolWeight = (_weights[i] * _weight) / _totalVoteWeight;
+
                 require(votes[account][_pool] == 0, "zero votes");
                 require(_poolWeight != 0, "zero weight");
 
@@ -320,15 +272,9 @@ contract Voter is
                 weights[_pool] += _poolWeight;
                 votes[account][_pool] += _poolWeight;
 
-                IBribe(internal_bribes[_gauge])._deposit(
-                    uint256(_poolWeight),
-                    account
-                );
+                IBribe(internal_bribes[_gauge])._deposit(uint256(_poolWeight), account);
 
-                IBribe(external_bribes[_gauge])._deposit(
-                    uint256(_poolWeight),
-                    account
-                );
+                IBribe(external_bribes[_gauge])._deposit(uint256(_poolWeight), account);
                 _usedWeight += _poolWeight;
                 emit Voted(account, _poolWeight);
             }
@@ -351,23 +297,15 @@ contract Voter is
     }
 
     // VE approval helpers
-    function _isAuthorized(
-        address owner,
-        address spender,
-        uint256 tokenId
-    ) private view returns (bool) {
-        return
-            spender != address(0) &&
-            (owner == spender ||
-                IERC721(ve).isApprovedForAll(owner, spender) ||
-                IERC721(ve).getApproved(tokenId) == spender);
+    function _isAuthorized(address owner, address spender, uint256 tokenId) private view returns (bool) {
+        return spender != address(0)
+            && (
+                owner == spender || IERC721(ve).isApprovedForAll(owner, spender)
+                    || IERC721(ve).getApproved(tokenId) == spender
+            );
     }
 
-    function _checkAuthorized(
-        address owner,
-        address spender,
-        uint256 tokenId
-    ) private view {
+    function _checkAuthorized(address owner, address spender, uint256 tokenId) private view {
         if (!_isAuthorized(owner, spender, tokenId)) {
             if (owner == address(0)) {
                 revert("ERC721: owner query for nonexistent token");
@@ -377,12 +315,10 @@ contract Voter is
         }
     }
 
-    function _createGauge(
-        uint16 _LzPoolChainId,
-        address _pool,
-        address token0,
-        address token1
-    ) internal returns (address) {
+    function _createGauge(uint16 _LzPoolChainId, address _pool, address token0, address token1)
+        internal
+        returns (address)
+    {
         require(gauges[_pool] == address(0), "exists");
         require(ustb != address(0), "!ustb ");
         address _internal_bribe;
@@ -393,40 +329,27 @@ contract Voter is
         //create internal bribe contract to collect LP fees
         string memory _type = "Pearl LP Fees";
         _internal_bribe = IBribeFactory(bribefactory).createBribe(
-            _lzMainChainId,
-            _LzPoolChainId,
-            _pool,
-            owner(),
-            token0,
-            token1,
-            _type
+            _lzMainChainId, _LzPoolChainId, _pool, owner(), token0, token1, _type
         );
         isBribe[_internal_bribe] = true;
 
         //create external bribe
         _type = "Pearl Bribes";
         _external_bribe = IBribeFactory(bribefactory).createBribe(
-            _lzMainChainId,
-            _LzPoolChainId,
-            _pool,
-            owner(),
-            token0,
-            token1,
-            _type
+            _lzMainChainId, _LzPoolChainId, _pool, owner(), token0, token1, _type
         );
         isBribe[_external_bribe] = true;
 
-        (address _gauge, address _almGauge) = IGaugeV2Factory(gaugefactory)
-            .createGauge(
-                _lzMainChainId,
-                _LzPoolChainId,
-                factory,
-                _pool,
-                base, //rewardToken
-                address(this), //Distribution
-                _internal_bribe,
-                true
-            );
+        (address _gauge, address _almGauge) = IGaugeV2Factory(gaugefactory).createGauge(
+            _lzMainChainId,
+            _LzPoolChainId,
+            factory,
+            _pool,
+            base, //rewardToken
+            address(this), //Distribution
+            _internal_bribe,
+            true
+        );
 
         internal_bribes[_gauge] = _internal_bribe;
         external_bribes[_gauge] = _external_bribe;
@@ -438,13 +361,7 @@ contract Voter is
         supplyIndex[_gauge] = index;
         pools.push(_pool);
 
-        emit GaugeCreated(
-            _gauge,
-            msg.sender,
-            _internal_bribe,
-            _external_bribe,
-            _pool
-        );
+        emit GaugeCreated(_gauge, msg.sender, _internal_bribe, _external_bribe, _pool);
 
         return _gauge;
     }
@@ -460,10 +377,7 @@ contract Voter is
      * @param _adapterParams The adapter parameters required for Layerzero.
      * @return _gauge The address of the newly created gauge.
      */
-    function createGauge(
-        address _pool,
-        bytes memory _adapterParams
-    ) external payable returns (address _gauge) {
+    function createGauge(address _pool, bytes memory _adapterParams) external payable returns (address _gauge) {
         bool isPair = IPearlV2Factory(factory).isPair(_pool);
         require(isPair, "!pair");
 
@@ -484,19 +398,10 @@ contract Voter is
 
         //notify main chain chain to create the child gauge for the pool
         if (!isMainChain) {
-            _adapterParams = _adapterParams.length > 2
-                ? _adapterParams
-                : defaultAdapterParams;
+            _adapterParams = _adapterParams.length > 2 ? _adapterParams : defaultAdapterParams;
             bytes memory _payload = abi.encode(_pool);
 
-            _lzSend(
-                lzMainChainId,
-                _payload,
-                payable(msg.sender),
-                address(0x0),
-                _adapterParams,
-                msg.value
-            );
+            _lzSend(lzMainChainId, _payload, payable(msg.sender), address(0x0), _adapterParams, msg.value);
         }
     }
 
@@ -525,17 +430,13 @@ contract Voter is
 
     function poke(address account) external nonReentrant isAllowed {
         require(msg.sender == ve, "!ve");
-        uint256 lastVotedEpoch = (lastVoted[account] / EPOCH_DURATION) *
-            EPOCH_DURATION;
+        uint256 lastVotedEpoch = (lastVoted[account] / EPOCH_DURATION) * EPOCH_DURATION;
         uint256 currentEpoch = IMinter(minter).active_period();
         if (lastVotedEpoch < currentEpoch) return;
         _poke(account);
     }
 
-    function vote(
-        address[] memory _poolVote,
-        uint256[] memory _weights
-    ) external nonReentrant isAllowed {
+    function vote(address[] memory _poolVote, uint256[] memory _weights) external nonReentrant isAllowed {
         address account = msg.sender;
         require(_poolVote.length == _weights.length, "length mismatch");
         lastVoted[account] = block.timestamp;
@@ -561,11 +462,8 @@ contract Voter is
         emit GaugeRevived(_gauge);
     }
 
-    function claimBribes(
-        address[] memory _bribes,
-        address[][] memory _tokens
-    ) external isClaimAllowed {
-        for (uint256 i = _bribes.length; i != 0; ) {
+    function claimBribes(address[] memory _bribes, address[][] memory _tokens) external isClaimAllowed {
+        for (uint256 i = _bribes.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -573,11 +471,8 @@ contract Voter is
         }
     }
 
-    function claimFees(
-        address[] memory _fees,
-        address[][] memory _tokens
-    ) external isClaimAllowed {
-        for (uint256 i = _fees.length; i != 0; ) {
+    function claimFees(address[] memory _fees, address[][] memory _tokens) external isClaimAllowed {
+        for (uint256 i = _fees.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -586,7 +481,7 @@ contract Voter is
     }
 
     function distributeFees(address[] memory _gauges) external {
-        for (uint256 i = _gauges.length; i != 0; ) {
+        for (uint256 i = _gauges.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -595,7 +490,7 @@ contract Voter is
     }
 
     function distributeFees(uint256 start, uint256 finish) public {
-        for (uint256 x = start; x < finish; ) {
+        for (uint256 x = start; x < finish;) {
             address _gauge = gauges[pools[x]];
             _distributeFess(_gauge);
             unchecked {
@@ -628,7 +523,7 @@ contract Voter is
     }
 
     function distribute(uint256 start, uint256 finish) public nonReentrant {
-        for (uint256 x = start; x < finish; ) {
+        for (uint256 x = start; x < finish;) {
             _distribute(gauges[pools[x]]);
             unchecked {
                 ++x;
@@ -637,7 +532,7 @@ contract Voter is
     }
 
     function distribute(address[] memory _gauges) external nonReentrant {
-        for (uint256 x = _gauges.length; x != 0; ) {
+        for (uint256 x = _gauges.length; x != 0;) {
             unchecked {
                 --x;
             }
@@ -648,12 +543,11 @@ contract Voter is
     function notifyRewardAmount(uint256 amount) external {
         require(msg.sender == minter, "!minter");
         require(totalWeight != 0, "no votes");
-        IERC20Upgradeable(base).safeTransferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
+        IERC20Upgradeable(base).safeTransferFrom(msg.sender, address(this), amount);
         uint256 _ratio = (amount * PRECISION) / totalWeight; // PRECISION adjustment is removed during claim
+        console.log(amount, "amount");
+        console.log(_ratio, "ratio");
+
         if (_ratio != 0) {
             index += _ratio;
         }
@@ -673,11 +567,7 @@ contract Voter is
         emit EmergencyCouncilChanged(_council);
     }
 
-    function setNewBribe(
-        address _gauge,
-        address _internal,
-        address _external
-    ) external {
+    function setNewBribe(address _gauge, address _internal, address _external) external {
         require(msg.sender == emergencyCouncil, "sender not emergency council");
         require(isGauge[_gauge], "not gauge");
         internal_bribes[_gauge] = _internal;
@@ -689,15 +579,13 @@ contract Voter is
         emit MinterChanged(_minter);
     }
 
-    function setEpochController(
-        address _epochControllerAddress
-    ) external onlyGovernor {
+    function setEpochController(address _epochControllerAddress) external onlyGovernor {
         epochController = _epochControllerAddress;
         emit EpochCotrollerChanged(_epochControllerAddress);
     }
 
     function whitelist(address[] memory _token) public onlyGovernor {
-        for (uint256 i = _token.length; i != 0; ) {
+        for (uint256 i = _token.length; i != 0;) {
             unchecked {
                 --i;
             }
@@ -734,32 +622,21 @@ contract Voter is
     }
 
     function hasVoted(address _account) external view returns (bool) {
-        return
-            voted[_account] &&
-            lastVoted[_account] >= IMinter(minter).active_period();
+        return voted[_account] && lastVoted[_account] >= IMinter(minter).active_period();
     }
 
-    function estimateSendFee(
-        address _pool,
-        bool _useZro,
-        bytes memory _adapterParams
-    ) public view returns (uint nativeFee, uint zroFee) {
+    function estimateSendFee(address _pool, bool _useZro, bytes memory _adapterParams)
+        public
+        view
+        returns (uint256 nativeFee, uint256 zroFee)
+    {
         bytes memory _payload = abi.encode(_pool);
         uint16 _dstChainId = uint16(lzMainChainId);
         bytes memory trustedRemote = getTrustedRemote(_dstChainId);
-        (address _dstAddress, ) = abi.decode(trustedRemote, (address, address));
+        (address _dstAddress,) = abi.decode(trustedRemote, (address, address));
 
-        _adapterParams = _adapterParams.length > 2
-            ? _adapterParams
-            : defaultAdapterParams;
+        _adapterParams = _adapterParams.length > 2 ? _adapterParams : defaultAdapterParams;
 
-        return
-            lzEndpoint.estimateFees(
-                _dstChainId,
-                _dstAddress,
-                _payload,
-                _useZro,
-                _adapterParams
-            );
+        return lzEndpoint.estimateFees(_dstChainId, _dstAddress, _payload, _useZro, _adapterParams);
     }
 }
