@@ -1,26 +1,31 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
+import {Bytes} from "../utils/bytes.sol";
 import {Voter} from "../../src/Voter.sol";
 import {GaugeV2} from "../../src/GaugeV2.sol";
+import {BytesCode} from "../utils/bytesCode.sol";
 import {Bribe} from "../../src/v1.5/Bribe.sol";
+import {WETH9} from "../../src/mock/WETH9.sol";
+import {Handler} from "./IntegrationHandler.sol";
 import {Minter} from "../../src/v1.5/Minter.sol";
 import {OFTMockToken} from ".././OFTMockToken.sol";
 import {GaugeV2ALM} from "../../src/GaugeV2ALM.sol";
 import {LiquidBox} from "../../src/box/LiquidBox.sol";
 import {IPearl} from "../../src/interfaces/IPearl.sol";
-import {WETH9} from "../../src/mock/WETH9.sol";
 import {TestERC20} from "../../src/mock/TestERC20.sol";
+import {PearlToken} from "../../src/mock/PearlToken.sol";
 import {GaugeV2Factory} from "../../src/GaugeV2Factory.sol";
 import {BribeFactory} from "../../src/v1.5/BribeFactory.sol";
 import {Test, console2 as console} from "forge-std/Test.sol";
 import {LiquidBoxFactory} from "../../src/box/LiquidBoxFactory.sol";
 import {LiquidBoxManager} from "../../src/box/LiquidBoxManager.sol";
 import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {LiquidityAmounts} from "../../src/libraries/LiquidityAmounts.sol";
+import {IPearlV2Pool} from "../../src/interfaces/dex/IPearlV2Pool.sol";
 import {IERC721} from "openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {VotingEscrow} from "pearl-token/src/governance/VotingEscrow.sol";
-import {IPearlV2Pool} from "../../src/interfaces/dex/IPearlV2Pool.sol";
+import {RewardsDistributor} from "../../src/v1.5/RewardsDistributor.sol";
+import {LiquidityAmounts} from "../../src/libraries/LiquidityAmounts.sol";
 import {IPearlV2Factory} from "../../src/interfaces/dex/IPearlV2Factory.sol";
 import {EpochController} from "../../src/v1.5/automation/EpochController.sol";
 import {SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -30,9 +35,6 @@ import {IERC721Receiver} from "openzeppelin/contracts/token/ERC721/IERC721Receiv
 import {INonfungiblePositionManager} from "../../src/interfaces/dex/INonfungiblePositionManager.sol";
 import {LZEndpointMock} from
     "pearl-token/lib/tangible-foundation-contracts/lib/layerzerolabs/contracts/lzApp/mocks/LZEndpointMock.sol";
-import {Bytes} from "./bytes.sol";
-import {Handler} from "./IntegrationHandler.sol";
-import {RewardsDistributor} from "../../src/v1.5/RewardsDistributor.sol";
 
 contract IntegrationTest is Test, Bytes {
     WETH9 public weth9;
@@ -79,9 +81,12 @@ contract IntegrationTest is Test, Bytes {
     LiquidBoxFactory public liquidBoxFactoryL2;
     LiquidBoxManager public liquidBoxManagerL2;
 
-    TestERC20 public testERC20;
-    TestERC20 testERC20X;
+    TestERC20 public tERC20;
+    TestERC20 tERC20X;
     Handler public handler;
+
+    address[] gauges;
+    address[] public pools;
 
     uint256 public mainChainId;
     uint16 public lzMainChainId;
@@ -90,8 +95,8 @@ contract IntegrationTest is Test, Bytes {
     address pool;
 
     function setUp() public {
-        testERC20 = new TestERC20(1 ether);
-        testERC20X = new TestERC20(1 ether);
+        tERC20 = new TestERC20();
+        tERC20X = new TestERC20();
 
         lzMainChainId = uint16(100);
         lzPoolChainId = uint16(101);
@@ -107,16 +112,16 @@ contract IntegrationTest is Test, Bytes {
         liquidBoxFactory = new LiquidBoxFactory();
 
         lzEndPointMockL1 = new LZEndpointMock(lzMainChainId);
-        pearlV2Pool = IPearlV2Pool(deployCode(pearlV2PoolBytesCode));
+        pearlV2Pool = IPearlV2Pool(BytesCode.deployCode(pearlV2PoolBytesCode));
 
         bytes memory constructorArgs = abi.encode(address(this), address(pearlV2Pool));
         bytes memory deploymentData = abi.encodePacked(pearlV2FactoryBytesCode, constructorArgs);
 
-        pearlV2Factory = IPearlV2Factory(deployCode(abi.encodePacked(deploymentData)));
+        pearlV2Factory = IPearlV2Factory(BytesCode.deployCode(abi.encodePacked(deploymentData)));
         constructorArgs = abi.encode(address(pearlV2Factory), address(weth9), address(7));
 
         deploymentData = abi.encodePacked(nonfungiblePositionManagerBytesCode, constructorArgs);
-        nonfungiblePositionManager = INonfungiblePositionManager(deployCode(deploymentData));
+        nonfungiblePositionManager = INonfungiblePositionManager(BytesCode.deployCode(deploymentData));
 
         nativeOFT = new OFTMockToken(address(lzEndPointMockL1));
         otherOFT = new OFTMockToken(address(lzEndPointMockL1));
@@ -125,7 +130,7 @@ contract IntegrationTest is Test, Bytes {
         address voterProxyAddress = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 12);
 
         vesting = new VotingEscrowVesting(votingEscrowProxyAddress);
-        votingEscrow = new VotingEscrow(address(nativeOFT));
+        votingEscrow = new VotingEscrow(address(tERC20));
 
         bytes memory init =
             abi.encodeCall(VotingEscrow.initialize, (address(vesting), address(voterProxyAddress), address(0)));
@@ -151,13 +156,13 @@ contract IntegrationTest is Test, Bytes {
         mainChainId = block.chainid;
 
         address[] memory addr = new address[](1);
-        addr[0] = address(nativeOFT);
+        addr[0] = address(tERC20);
 
         bribe = new Bribe();
         bribeFactoryL1 = new BribeFactory(mainChainId);
 
         init = abi.encodeCall(
-            BribeFactory.initialize, (address(this), address(bribe), voterProxyAddress, address(nativeOFT), addr)
+            BribeFactory.initialize, (address(this), address(bribe), voterProxyAddress, address(tERC20), addr)
         );
 
         ERC1967Proxy bribeFactoryL1Proxy = new ERC1967Proxy(address(bribeFactoryL1), init);
@@ -181,7 +186,7 @@ contract IntegrationTest is Test, Bytes {
 
         gaugeV2FactoryL1 = GaugeV2Factory(address(gaugeV2FactoryL1Proxy));
 
-        pool = pearlV2Factory.createPool(address(nativeOFT), address(otherOFT), 100);
+        pool = pearlV2Factory.createPool(address(tERC20), address(tERC20X), 100);
         pearlV2Factory.initializePoolPrice(pool, 1 ether);
 
         voterL1 = new Voter(mainChainId, address(lzEndPointMockL1));
@@ -192,11 +197,11 @@ contract IntegrationTest is Test, Bytes {
                 address(this),
                 address(this),
                 address(votingEscrow),
-                address(nativeOFT),
+                address(tERC20),
                 address(pearlV2Factory),
                 address(gaugeV2FactoryL1),
                 address(bribeFactoryL1),
-                address(nativeOFT),
+                address(tERC20),
                 lzMainChainId,
                 lzMainChainId
             )
@@ -227,74 +232,97 @@ contract IntegrationTest is Test, Bytes {
         voterL1.setEpochController(address(epochController));
 
         pearlV2Factory.setGaugeManager(address(voterL1));
-        gaugeV2 = GaugeV2(payable(voterL1.createGauge{value: 0.1 ether}(pool, "0x")));
+        // gaugeV2 = GaugeV2(payable(voterL1.createGauge{value: 0.1 ether}(pool, "0x")));
 
-        handler =
-            new Handler(voterL1, address(votingEscrow), address(nativeOFT), pool, gaugeV2, address(epochController));
+        for (uint256 i = 0; i < 5; i++) {
+            TestERC20 tokenX = new TestERC20();
+            address _pool = pearlV2Factory.createPool(address(tERC20), address(tokenX), 100);
+            address gauge_ = voterL1.createGauge{value: 0.1 ether}(_pool, "0x");
+
+            gauges.push(gauge_);
+            pools.push(_pool);
+        }
+
+        handler = new Handler(
+            voterL1,
+            address(votingEscrow),
+            address(tERC20),
+            pool,
+            gaugeV2,
+            address(epochController),
+            address(lzEndPointMockL1),
+            address(this),
+            pools
+        );
 
         bytes4[] memory selectors = new bytes4[](3);
         selectors[0] = Handler.mintNFT.selector;
         selectors[1] = Handler.vote.selector;
         selectors[2] = Handler.distribute.selector;
+        // selectors[3] = Handler.createGauge.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }
 
-    // function invariant_bribeBalanceIsSame() external {
-    //     bribe = Bribe(voterL1.external_bribes(address(gaugeV2)));
+    function invariant_bribeBalanceIsSame() external {
+        for (uint256 i = 0; i < pools.length; i++) {
+            Bribe b = Bribe(voterL1.external_bribes(gauges[i]));
 
-    //     uint256 sum;
-    //     address[] memory actors = handler.actors();
+            uint256 sum;
+            address[] memory actors = handler.actors();
 
-    //     for (uint256 i; i < actors.length; ++i) {
-    //         sum += bribe.balanceOf(actors[i]);
-    //     }
+            for (uint256 i; i < actors.length; ++i) {
+                sum += b.balanceOf(actors[i]);
+            }
 
-    //     console.log(handler.ghost_usersVote(), sum);
-    // }
-
-    function invariant_bribe() external {
-        assertEq(nativeOFT.balanceOf(address(rewardsDistributor)), handler.ghost_rebaseRewards());
-        assertEq(nativeOFT.balanceOf(address(gaugeV2)), handler.ghost_gaugesReward());
+            console.log(handler.ghost_usersVotes(pools[i]), sum, "o");
+        }
     }
 
-    // function test_dev() public {
-    //     // console.logBytes32(keccak256(pearlV2PoolBytesCode));
-    //     bytes32 bytecodeHash = keccak256(getContractCreationCode(address(pearlV2Pool)));
-    //     console.logBytes32(bytecodeHash);
-    //     (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether);
+    function invariant_rewardsDistribution() external {
+        assertEq(tERC20.balanceOf(address(this)), handler.ghost_teamEmissions());
+        assertEq(tERC20.balanceOf(address(rewardsDistributor)), handler.ghost_rebaseRewards());
 
-    //     // nonfungiblePositionManager.approve(address(gaugeV2), tokenId);
+        for (uint256 i = 0; i < pools.length; i++) {
+            assertEq(tERC20.balanceOf(gauges[i]), handler.ghost_gaugesRewards(gauges[i]));
+        }
+    }
 
-    //     // (address owner, uint128 liquidityAdded,,) =
-    //     //     gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
+    // function test_deposit() public {
+    // console.log(pool, "p");
+    // (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether);
 
-    //     // assertEq(liquidityAdded, 0);
-    //     // assertEq(gaugeV2.stakedBalance(address(this)), 0);
+    // nonfungiblePositionManager.approve(address(gaugeV2), tokenId);
 
-    //     // gaugeV2.deposit(tokenId);
+    // (address owner, uint128 liquidityAdded,,) =
+    //     gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
 
-    //     // (owner, liquidityAdded,,) = gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
+    // assertEq(liquidityAdded, 0);
+    // assertEq(gaugeV2.stakedBalance(address(this)), 0);
 
-    //     // assertEq(owner, address(this));
-    //     // assertEq(liquidityToAdd, liquidityAdded);
-    //     // assertEq(gaugeV2.stakedBalance(address(this)), 1);
+    // gaugeV2.deposit(tokenId);
+
+    // (owner, liquidityAdded,,) = gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
+
+    // assertEq(owner, address(this));
+    // assertEq(liquidityToAdd, liquidityAdded);
+    // assertEq(gaugeV2.stakedBalance(address(this)), 1);
     // }
 
     // function mintNewPosition(uint256 amount0ToAdd, uint256 amount1ToAdd)
     //     private
     //     returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
     // {
-    //     deal(address(testERC20), address(this), amount1ToAdd);
-    //     deal(address(testERC20X), address(this), amount0ToAdd);
+    //     deal(address(tERC20), address(this), amount1ToAdd);
+    //     deal(address(tERC20X), address(this), amount0ToAdd);
 
-    //     testERC20X.approve(address(nonfungiblePositionManager), amount0ToAdd);
-    //     testERC20.approve(address(nonfungiblePositionManager), amount1ToAdd);
+    //     tERC20X.approve(address(nonfungiblePositionManager), amount0ToAdd);
+    //     tERC20.approve(address(nonfungiblePositionManager), amount1ToAdd);
 
     //     INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
-    //         token0: address(testERC20X),
-    //         token1: address(testERC20),
+    //         token0: address(tERC20X),
+    //         token1: address(tERC20),
     //         fee: 100,
     //         tickLower: -887272,
     //         tickUpper: 887272,
@@ -308,25 +336,6 @@ contract IntegrationTest is Test, Bytes {
 
     //     (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(params);
     // }
-
-    function deployCode(bytes memory bytecode) internal returns (address payable addr) {
-        assembly {
-            addr := create(0, add(bytecode, 0x20), mload(bytecode))
-
-            if iszero(extcodesize(addr)) {
-                returndatacopy(0, 0, returndatasize())
-                revert(0, returndatasize())
-            }
-        }
-    }
-
-    function getContractCreationCode(address logic) internal pure returns (bytes memory) {
-        bytes10 creation = 0x3d602d80600a3d3981f3;
-        bytes10 prefix = 0x363d3d373d3d3d363d73;
-        bytes20 targetBytes = bytes20(logic);
-        bytes15 suffix = 0x5af43d82803e903d91602b57fd5bf3;
-        return abi.encodePacked(creation, prefix, targetBytes, suffix);
-    }
 
     function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
         return this.onERC721Received.selector;

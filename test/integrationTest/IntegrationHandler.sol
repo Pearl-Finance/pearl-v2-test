@@ -8,19 +8,23 @@ import {Bribe} from "../../src/v1.5/Bribe.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {OFTMockToken} from ".././OFTMockToken.sol";
+import {TestERC20} from "../../src/mock/TestERC20.sol";
 import {console2 as console} from "forge-std/Test.sol";
 import {IMinter} from "../../src/interfaces/IMinter.sol";
 import {AddressSet, LibAddressSet} from "./LibAddressSet.sol";
 import {IVotingEscrow} from "../../src/interfaces/IVotingEscrow.sol";
 import {IVotingEscrow} from "../../src/interfaces/IVotingEscrow.sol";
 import {IEpochController} from "../../src/interfaces/IEpochController.sol";
-import "openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import {IPearlV2Factory} from "../../src/interfaces/dex/IPearlV2Factory.sol";
+import {MathUpgradeable} from "openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
 contract Handler is CommonBase, StdCheats, StdUtils {
     using LibAddressSet for AddressSet;
 
     AddressSet internal _actors;
 
+    TestERC20 public testERC20;
+    TestERC20 public tokenX;
     OFTMockToken public nativeOFT;
     address public ve;
     Voter public voter;
@@ -29,19 +33,25 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     IMinter public minter;
     IEpochController public epochController;
     address pool;
+    address[] pools;
 
     mapping(address => uint256) ids;
     mapping(address => bool) hasVoted;
     mapping(bytes32 => uint256) public calls;
+    mapping(address => uint256) public ghost_usersVotes;
+    mapping(address => uint256) public ghost_gaugesRewards;
 
+    address tester;
     address currentActor;
+    address lzEndPointMockL1;
+
     uint256 public ghost_zeroMint;
     uint256 public ghost_mintedSum;
     uint256 public ghost_actualMint;
     uint256 public ghost_usersVote;
     uint256 public ghost_rebaseRewards;
     uint256 public ghost_teamEmissions;
-    uint256 public ghost_gaugesReward;
+    uint256 public ghost_totalGaugesRewards;
     uint256 weekly = 2_600_000 * 10 ** 18;
     uint256 public emission = 990;
     uint256 public teamRate = 25;
@@ -52,12 +62,15 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     constructor(
         Voter _voter,
         address _ve,
-        address _nativeOFT,
+        address _testERC20,
         address _pool,
         GaugeV2 _gauge,
-        address _epochController
+        address _epochController,
+        address _lzEndPointMockL1,
+        address _tester,
+        address[] memory _pools
     ) {
-        nativeOFT = OFTMockToken(_nativeOFT);
+        testERC20 = TestERC20(_testERC20);
         ve = _ve;
         voter = _voter;
         pool = _pool;
@@ -65,6 +78,9 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         epochController = IEpochController(_epochController);
         bribe = Bribe(voter.external_bribes(address(gauge)));
         minter = IMinter(voter.minter());
+        lzEndPointMockL1 = _lzEndPointMockL1;
+        tester = _tester;
+        pools = _pools;
     }
 
     modifier createActor() {
@@ -90,14 +106,14 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
             duration = bound(amount, 2 weeks, 2 * 52 weeks);
 
-            if (amount != 0) {
+            if (amount != 0 && !IEpochController(epochController).checkDistribution()) {
                 if (amount < 1e18) amount = amount * 1e18;
                 ghost_actualMint++;
                 ghost_mintedSum += amount;
 
                 __mint(currentActor, amount);
                 vm.startPrank(currentActor);
-                nativeOFT.approve(address(ve), amount);
+                testERC20.approve(address(ve), amount);
 
                 (bool success0, bytes memory data) = address(ve).call(
                     abi.encodeWithSignature("mint(address,uint256,uint256)", currentActor, amount, duration)
@@ -114,17 +130,26 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         }
     }
 
-    function vote(uint256 actorSeed, uint256 weight) public useActor(actorSeed) countCall("set reward") {
-        weight = bound(weight, 0, 10);
+    function vote(uint256 actorSeed, uint256 weight, uint256 poolID)
+        public
+        useActor(actorSeed)
+        countCall("set reward")
+    {
+        weight = 1;
+        poolID = bound(poolID, 0, pools.length - 1);
+
         if (weight > 0) {
             address[] memory _poolVote = new address[](1);
-            _poolVote[0] = pool;
+            _poolVote[0] = pools[poolID];
 
             uint256[] memory _weights = new uint256[](1);
-            _weights[0] = 1;
+            _weights[0] = weight;
+
+            address gauge_ = voter.gauges(pools[poolID]);
+            Bribe b = Bribe(voter.external_bribes(address(gauge_)));
 
             uint256 vote = IVotingEscrow(ve).getVotes(currentActor);
-            uint256 previousBalance = bribe.balanceOf(currentActor);
+            uint256 previousBalance = b.balanceOf(currentActor);
 
             if (vote > 0) {
                 vm.startPrank(currentActor);
@@ -132,9 +157,9 @@ contract Handler is CommonBase, StdCheats, StdUtils {
                 vm.stopPrank();
 
                 if (hasVoted[currentActor]) {
-                    userVotes(currentActor, previousBalance, true);
+                    userVotes(currentActor, previousBalance, true, b, pools[poolID]);
                 } else {
-                    userVotes(currentActor, 0, false);
+                    userVotes(currentActor, 0, false, b, pools[poolID]);
                 }
 
                 hasVoted[currentActor] = true;
@@ -144,7 +169,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
     bool firstTime;
 
-    function distribute() external {
+    function distribute() public {
         if (ghost_usersVote > 0) {
             uint256 _weekly;
 
@@ -167,38 +192,50 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
             ghost_rebaseRewards += _rebase;
             ghost_teamEmissions += _teamEmissions;
-            ghost_gaugesReward += gaugesReward;
+            ghost_totalGaugesRewards += gaugesReward;
 
             vm.warp(block.timestamp + minter.nextPeriod());
             epochController.distribute();
-        }
-    }
 
-    function _updateFor(uint256 index) internal returns (uint256 _share) {
-        uint256 _supplied = voter.weights(pool);
-        if (_supplied != 0) {
-            uint256 _supplyIndex = voter.supplyIndex(address(gauge));
-            uint256 _index = index;
-            uint256 _delta = _index - _supplyIndex;
-
-            if (_delta != 0) {
-                _share = (_supplied * _delta) / 1e18;
+            if (IEpochController(epochController).checkDistribution()) {
+                // finish distribution
+                while (IEpochController(epochController).checkDistribution()) {
+                    epochController.distribute();
+                }
             }
         }
     }
 
-    function userVotes(address actor, uint256 previousBalance, bool voted) internal {
-        if (voted) {
-            ghost_usersVote -= previousBalance;
-            ghost_usersVote += bribe.balanceOf(actor);
-        } else {
-            ghost_usersVote += bribe.balanceOf(actor);
+    function _updateFor(uint256 index) internal returns (uint256 _share) {
+        for (uint256 i = 0; i < pools.length; i++) {
+            address gauge_ = voter.gauges(pools[i]);
+            uint256 _supplied = voter.weights(pools[i]);
+
+            if (_supplied != 0) {
+                uint256 _supplyIndex = voter.supplyIndex(address(gauge_));
+                uint256 _delta = index - _supplyIndex;
+
+                if (_delta != 0) {
+                    uint256 reward = (_supplied * _delta) / 1e18;
+                    _share += reward;
+                    ghost_gaugesRewards[gauge_] += reward;
+                }
+            }
         }
     }
 
-    // function createGauge(uint256 amount) public countCall("set reward") {
-    //     voter.createGauge(_pool, _adapterParams);
-    // }
+    function userVotes(address actor, uint256 previousBalance, bool voted, Bribe b, address votePool) internal {
+        if (voted) {
+            ghost_usersVote -= previousBalance;
+            ghost_usersVote += b.balanceOf(actor);
+
+            ghost_usersVotes[votePool] -= previousBalance;
+            ghost_usersVotes[votePool] += b.balanceOf(actor);
+        } else {
+            ghost_usersVote += b.balanceOf(actor);
+            ghost_usersVotes[votePool] += b.balanceOf(actor);
+        }
+    }
 
     function claim(uint256 actorSeed) public useActor(actorSeed) countCall("claim") {}
 
@@ -241,21 +278,21 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
     function __mint(address addr, uint256 amount) internal {
         vm.startPrank(address(11));
-        (bool success,) = address(nativeOFT).call(abi.encodeWithSignature("mint(address,uint256)", addr, amount));
+        (bool success,) = address(testERC20).call(abi.encodeWithSignature("mint(address,uint256)", addr, amount));
         assert(success);
         vm.stopPrank();
     }
 
     function weekly_emission() public view returns (uint256) {
         uint256 calculate_emission = (weekly * emission) / PRECISION;
-        uint256 circulating_supply = nativeOFT.totalSupply() - nativeOFT.balanceOf(ve);
+        uint256 circulating_supply = testERC20.totalSupply() - testERC20.balanceOf(ve);
         circulating_supply = (circulating_supply * 2) / PRECISION;
         return MathUpgradeable.max(circulating_supply, calculate_emission);
     }
 
     function calculate_rebase(uint256 _weeklyMint) public view returns (uint256) {
-        uint256 _veTotal = nativeOFT.balanceOf(address(ve));
-        uint256 _pearlTotal = nativeOFT.totalSupply();
+        uint256 _veTotal = testERC20.balanceOf(address(ve));
+        uint256 _pearlTotal = testERC20.totalSupply();
 
         uint256 lockedShare = (_veTotal * rebaseSlope) / _pearlTotal;
         if (lockedShare >= rebaseMax) {
