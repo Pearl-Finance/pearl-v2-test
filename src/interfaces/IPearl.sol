@@ -34,10 +34,7 @@ interface IPearl {
      * @param amount The amount of Pearl tokens to transfer.
      * @return A boolean indicating whether the transfer was successful.
      */
-    function transfer(
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
+    function transfer(address recipient, uint256 amount) external returns (bool);
 
     /**
      * @notice Transfers Pearl tokens from one address to another.
@@ -46,11 +43,7 @@ interface IPearl {
      * @param amount The amount of Pearl tokens to transfer.
      * @return A boolean indicating whether the transfer was successful.
      */
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 
     /**
      * @notice Mints new Pearl tokens and assigns them to a recipient.
@@ -70,12 +63,6 @@ interface IPearl {
     function setMinter(address _minter) external;
     function setDepositor(address _depositor) external;
 
-    function setTrustedRemoteAddress(
-        uint16 _remoteChainId,
-        bytes calldata _remoteAddress
-    ) external;
-    function setTrustedRemote(
-        uint16 _remoteChainId,
-        bytes calldata _path
-    ) external;
+    function setTrustedRemoteAddress(uint16 _remoteChainId, bytes calldata _remoteAddress) external;
+    function setTrustedRemote(uint16 _remoteChainId, bytes calldata _path) external;
 }

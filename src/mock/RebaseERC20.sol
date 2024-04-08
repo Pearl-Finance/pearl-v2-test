@@ -74,13 +74,11 @@ contract RebaseERC20 is ERC20Upgradeable {
 
     uint256 private constant DECIMALS = 18;
     uint256 private constant MAX_UINT256 = ~uint256(0);
-    uint256 private constant INITIAL_FRAGMENTS_SUPPLY =
-        10 * 10 ** 6 * 10 ** DECIMALS;
+    uint256 private constant INITIAL_FRAGMENTS_SUPPLY = 10 * 10 ** 6 * 10 ** DECIMALS;
 
     // TOTAL_GONS is a multiple of INITIAL_FRAGMENTS_SUPPLY so that _gonsPerFragment is an integer.
     // Use the highest value that fits in a uint256 for max granularity.
-    uint256 private constant TOTAL_GONS =
-        MAX_UINT256 - (MAX_UINT256 % INITIAL_FRAGMENTS_SUPPLY);
+    uint256 private constant TOTAL_GONS = MAX_UINT256 - (MAX_UINT256 % INITIAL_FRAGMENTS_SUPPLY);
 
     // MAX_SUPPLY = maximum integer < (sqrt(4*TOTAL_GONS + 1) - 1) / 2
     uint256 private constant MAX_SUPPLY = ~uint128(0); // (2^128) - 1
@@ -132,10 +130,12 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param supplyDelta The number of new fragment tokens to add into circulation via expansion.
      * @return The total number of fragments after the supply adjustment.
      */
-    function rebase(
-        uint256 epoch,
-        int256 supplyDelta
-    ) external onlyMonetaryPolicy whenRebaseNotPaused returns (uint256) {
+    function rebase(uint256 epoch, int256 supplyDelta)
+        external
+        onlyMonetaryPolicy
+        whenRebaseNotPaused
+        returns (uint256)
+    {
         if (supplyDelta == 0) {
             emit LogRebase(epoch, _totalSupply);
             return _totalSupply;
@@ -165,10 +165,7 @@ contract RebaseERC20 is ERC20Upgradeable {
         // _totalSupply = TOTAL_GONS.div(_gonsPerFragment)
 
         //notify autobriber to skim the bribe
-        ISolidlyAutoBriber(autoBriber).notify(
-            address(this),
-            uint256(supplyDelta)
-        );
+        ISolidlyAutoBriber(autoBriber).notify(address(this), uint256(supplyDelta));
         emit LogRebase(epoch, _totalSupply);
         return _totalSupply;
     }
@@ -178,10 +175,7 @@ contract RebaseERC20 is ERC20Upgradeable {
         _;
     }
 
-    function initialize(
-        string memory name_,
-        string memory symbol_
-    ) public initializer {
+    function initialize(string memory name_, string memory symbol_) public initializer {
         __ERC20_init(name_, symbol_);
 
         owner = msg.sender;
@@ -217,10 +211,7 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param value The amount to be transferred.
      * @return True on success, false otherwise.
      */
-    function transfer(
-        address to,
-        uint256 value
-    ) public override validRecipient(to) whenTokenNotPaused returns (bool) {
+    function transfer(address to, uint256 value) public override validRecipient(to) whenTokenNotPaused returns (bool) {
         uint256 gonValue = value.mul(_gonsPerFragment);
         _gonBalances[msg.sender] = _gonBalances[msg.sender].sub(gonValue);
         _gonBalances[to] = _gonBalances[to].add(gonValue);
@@ -234,10 +225,7 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param spender The address which will spend the funds.
      * @return The number of tokens still available for the spender.
      */
-    function allowance(
-        address owner_,
-        address spender
-    ) public view override returns (uint256) {
+    function allowance(address owner_, address spender) public view override returns (uint256) {
         return _allowedFragments[owner_][spender];
     }
 
@@ -247,14 +235,14 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param to The address you want to transfer to.
      * @param value The amount of tokens to be transferred.
      */
-    function transferFrom(
-        address from,
-        address to,
-        uint256 value
-    ) public override validRecipient(to) whenTokenNotPaused returns (bool) {
-        _allowedFragments[from][msg.sender] = _allowedFragments[from][
-            msg.sender
-        ].sub(value);
+    function transferFrom(address from, address to, uint256 value)
+        public
+        override
+        validRecipient(to)
+        whenTokenNotPaused
+        returns (bool)
+    {
+        _allowedFragments[from][msg.sender] = _allowedFragments[from][msg.sender].sub(value);
 
         uint256 gonValue = value.mul(_gonsPerFragment);
         _gonBalances[from] = _gonBalances[from].sub(gonValue);
@@ -275,10 +263,7 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param spender The address which will spend the funds.
      * @param value The amount of tokens to be spent.
      */
-    function approve(
-        address spender,
-        uint256 value
-    ) public override whenTokenNotPaused returns (bool) {
+    function approve(address spender, uint256 value) public override whenTokenNotPaused returns (bool) {
         _allowedFragments[msg.sender][spender] = value;
         emit Approval(msg.sender, spender, value);
         return true;
@@ -291,18 +276,9 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param spender The address which will spend the funds.
      * @param addedValue The amount of tokens to increase the allowance by.
      */
-    function increaseAllowance(
-        address spender,
-        uint256 addedValue
-    ) public override whenTokenNotPaused returns (bool) {
-        _allowedFragments[msg.sender][spender] = _allowedFragments[msg.sender][
-            spender
-        ].add(addedValue);
-        emit Approval(
-            msg.sender,
-            spender,
-            _allowedFragments[msg.sender][spender]
-        );
+    function increaseAllowance(address spender, uint256 addedValue) public override whenTokenNotPaused returns (bool) {
+        _allowedFragments[msg.sender][spender] = _allowedFragments[msg.sender][spender].add(addedValue);
+        emit Approval(msg.sender, spender, _allowedFragments[msg.sender][spender]);
         return true;
     }
 
@@ -312,23 +288,19 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @param spender The address which will spend the funds.
      * @param subtractedValue The amount of tokens to decrease the allowance by.
      */
-    function decreaseAllowance(
-        address spender,
-        uint256 subtractedValue
-    ) public override whenTokenNotPaused returns (bool) {
+    function decreaseAllowance(address spender, uint256 subtractedValue)
+        public
+        override
+        whenTokenNotPaused
+        returns (bool)
+    {
         uint256 oldValue = _allowedFragments[msg.sender][spender];
         if (subtractedValue >= oldValue) {
             _allowedFragments[msg.sender][spender] = 0;
         } else {
-            _allowedFragments[msg.sender][spender] = oldValue.sub(
-                subtractedValue
-            );
+            _allowedFragments[msg.sender][spender] = oldValue.sub(subtractedValue);
         }
-        emit Approval(
-            msg.sender,
-            spender,
-            _allowedFragments[msg.sender][spender]
-        );
+        emit Approval(msg.sender, spender, _allowedFragments[msg.sender][spender]);
         return true;
     }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+
 import "openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./dex/INonfungiblePositionManager.sol";
 
@@ -48,27 +49,19 @@ interface IGaugeV2 is IERC721Receiver {
      * @param data Bytes data for the NFT receiver method.
      * @return rewardOwed The amount of reward collected from staking the NFT.
      */
-    function withdraw(
-        uint256 tokenId,
-        address to,
-        bytes memory data
-    ) external returns (uint256 rewardOwed);
+    function withdraw(uint256 tokenId, address to, bytes memory data) external returns (uint256 rewardOwed);
 
     /**
      * @notice Increases the liquidity of the position.
      * @param params Parameters for increasing liquidity derived from INonfungiblePositionManager.
      */
-    function increaseLiquidity(
-        INonfungiblePositionManager.IncreaseLiquidityParams calldata params
-    ) external payable;
+    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params) external payable;
 
     /**
      * @notice Decreases the liquidity of the position.
      * @param params Parameters for decreasing liquidity derived from INonfungiblePositionManager.
      */
-    function decreaseLiquidity(
-        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
-    ) external;
+    function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params) external;
 
     /**
      * @notice Notifies the deposit of ALM LP tokens in the gauge.
@@ -76,11 +69,7 @@ interface IGaugeV2 is IERC721Receiver {
      * @param tickUpper The maximum tick limit of the ALM box.
      * @param liquidityDelta The liquidity delta staked in the gauge.
      */
-    function notifyERC20Deposit(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidityDelta
-    ) external;
+    function notifyERC20Deposit(int24 tickLower, int24 tickUpper, uint128 liquidityDelta) external;
 
     /**
      * @notice Notifies the withdrawal of ALM LP tokens from the gauge.
@@ -89,20 +78,16 @@ interface IGaugeV2 is IERC721Receiver {
      * @param liquidityDelta The liquidity delta unstaked from the gauge.
      * @return rewardOwed The amount of reward transferred to the owner before unstaking.
      */
-    function notifyERC20Withdraw(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidityDelta
-    ) external returns (uint256 rewardOwed);
+    function notifyERC20Withdraw(int24 tickLower, int24 tickUpper, uint128 liquidityDelta)
+        external
+        returns (uint256 rewardOwed);
 
     /**
      * @notice Collects rewards from the gauge.
      * @param tokenId The NFT tokenId for claiming the reward.
      * @return rewardOwed The amount of reward transferred to the owner.
      */
-    function collectReward(
-        uint256 tokenId
-    ) external returns (uint256 rewardOwed);
+    function collectReward(uint256 tokenId) external returns (uint256 rewardOwed);
 
     /**
      * @notice Collects rewards from the gauge accrued for ALM.
@@ -110,10 +95,7 @@ interface IGaugeV2 is IERC721Receiver {
      * @param tickUpper The maximum tick limit of the ALM box.
      * @return rewardOwed The amount of reward transferred to the owner.
      */
-    function collectRewardForALM(
-        int24 tickLower,
-        int24 tickUpper
-    ) external returns (uint256 rewardOwed);
+    function collectRewardForALM(int24 tickLower, int24 tickUpper) external returns (uint256 rewardOwed);
 
     /**
      * @notice Claims fees from the gauge.
@@ -208,10 +190,7 @@ interface IGaugeV2 is IERC721Receiver {
      * @param idx The index of the NFT token.
      * @return The NFT token ID.
      */
-    function tokenOfOwnerByIndex(
-        address owner,
-        uint256 idx
-    ) external view returns (uint256);
+    function tokenOfOwnerByIndex(address owner, uint256 idx) external view returns (uint256);
 
     /**
      * @notice Retrieves the address of the ALM gauge contract.
@@ -225,10 +204,7 @@ interface IGaugeV2 is IERC721Receiver {
      * @param tokenId The NFT tokenId.
      * @return amount The amount of claimable reward in the reward token.
      */
-    function getReward(
-        address owner,
-        uint256 tokenId
-    ) external view returns (uint256 amount);
+    function getReward(address owner, uint256 tokenId) external view returns (uint256 amount);
 
     /**
      * @notice Gets the claimable reward for ALM.
@@ -236,20 +212,14 @@ interface IGaugeV2 is IERC721Receiver {
      * @param tickUpper The upper range of the tick.
      * @return amount The amount of claimable reward in the reward token.
      */
-    function getRewardForALM(
-        int24 tickLower,
-        int24 tickUpper
-    ) external view returns (uint256 amount);
+    function getRewardForALM(int24 tickLower, int24 tickUpper) external view returns (uint256 amount);
 
     /**
      * @notice Gets the claimable fee for internal bribe distribution.
      * @return amount0 The amount of claimable fee in token0.
      * @return amount1 The amount of claimable fee in token1.
      */
-    function feeAmount()
-        external
-        view
-        returns (uint256 amount0, uint256 amount1);
+    function feeAmount() external view returns (uint256 amount0, uint256 amount1);
 
     /**
      * @notice Gets the reward amount pending for bridging to pool chain

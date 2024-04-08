@@ -22,6 +22,7 @@ import "./interfaces/IGaugeV2Factory.sol";
 import "./interfaces/dex/IPearlV2Pool.sol";
 import "./interfaces/dex/IPearlV2Factory.sol";
 import "./Epoch.sol";
+import {console2 as console} from "forge-std/Test.sol";
 
 contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -394,7 +395,7 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         _gauge = _createGauge(lzChainId, _pool, tokenA, tokenB);
 
         // Set the gauge for reward distribution
-        IPearlV2Factory(factory).setPoolGauge(_pool, _gauge);
+        // IPearlV2Factory(factory).setPoolGauge(_pool, _gauge);
 
         //notify main chain chain to create the child gauge for the pool
         if (!isMainChain) {

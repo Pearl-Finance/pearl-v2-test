@@ -32,18 +32,11 @@ contract FeeDistributor is OwnableUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(
-        address _intialOwner,
-        address _pairFactory,
-        address _voter
-    ) public initializer {
+    function initialize(address _intialOwner, address _pairFactory, address _voter) public initializer {
         __Ownable_init();
         _transferOwnership(_intialOwner);
 
-        require(
-            _pairFactory != address(0) || _voter != address(0),
-            "zero addr"
-        );
+        require(_pairFactory != address(0) || _voter != address(0), "zero addr");
 
         pairFactory = IPearlV2Factory(_pairFactory);
         voter = IVoter(_voter);
@@ -52,28 +45,18 @@ contract FeeDistributor is OwnableUpgradeable {
         intervalOffset = 10 minutes;
     }
 
-    function checker()
-        external
-        view
-        returns (bool canExec, bytes memory execPayload)
-    {
+    function checker() external view returns (bool canExec, bytes memory execPayload) {
         canExec = _isDistributing;
         if (!canExec) {
-            uint256 endOfInterval = (block.timestamp / interval) *
-                interval +
-                interval;
+            uint256 endOfInterval = (block.timestamp / interval) * interval + interval;
             uint256 distributionStartTime = endOfInterval - intervalOffset;
-            canExec =
-                block.timestamp > distributionStartTime &&
-                _lastProcessed < distributionStartTime;
+            canExec = block.timestamp > distributionStartTime && _lastProcessed < distributionStartTime;
             if (canExec) {
                 canExec = voter.length() > 0;
             }
         }
         if (canExec) {
-            execPayload = abi.encodeWithSelector(
-                FeeDistributor.distribute.selector
-            );
+            execPayload = abi.encodeWithSelector(FeeDistributor.distribute.selector);
         } else {
             execPayload = bytes("Not active");
         }
@@ -105,10 +88,7 @@ contract FeeDistributor is OwnableUpgradeable {
     }
 
     function setInterval(uint256 _interval) external onlyOwner {
-        require(
-            _interval >= 1 hours && _interval <= EPOCH_DURATION,
-            "invalid interval"
-        );
+        require(_interval >= 1 hours && _interval <= EPOCH_DURATION, "invalid interval");
         interval = _interval;
         emit IntervalSet(_interval);
     }

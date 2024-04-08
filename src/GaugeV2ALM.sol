@@ -24,17 +24,15 @@ import "./interfaces/box/ILiquidBoxMinimal.sol";
  * For detailed function descriptions and reward distribution mechanisms, refer to protocol documentaion.
  */
 
-contract GaugeV2ALM is
-    Initializable,
-    OwnableUpgradeable,
-    ReentrancyGuardUpgradeable
-{
+contract GaugeV2ALM is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     using Math for uint256;
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
-    /************************************************
+    /**
+     *
      *  NON UPGRADEABLE STORAGE
-     ***********************************************/
+     *
+     */
 
     //fix value as alm doesn't hold any NFT
     uint8 public constant decimals = 18;
@@ -66,9 +64,11 @@ contract GaugeV2ALM is
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
 
-    /************************************************
+    /**
+     *
      *  EVENTS
-     ***********************************************/
+     *
+     */
 
     event FeeChanged(uint24 indexed fee);
     event BoxChanged(address indexed box);
@@ -77,11 +77,7 @@ contract GaugeV2ALM is
     event Withdraw(address indexed user, uint256 amount);
     event CollectReward(address indexed user, uint256 reward);
     event ClaimFees(address indexed from, uint256 claimed0, uint256 claimed1);
-    event ClaimManagementFees(
-        address indexed owner,
-        address to,
-        uint256 protocolFees
-    );
+    event ClaimManagementFees(address indexed owner, address to, uint256 protocolFees);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -95,12 +91,7 @@ contract GaugeV2ALM is
         address _gaugeCL,
         address _lBoxManager
     ) public initializer {
-        require(
-            _rewardToken != address(0) &&
-                _gaugeCL != address(0) &&
-                _lBoxManager != address(0),
-            "!zero address"
-        );
+        require(_rewardToken != address(0) && _gaugeCL != address(0) && _lBoxManager != address(0), "!zero address");
 
         __Ownable_init();
         __ReentrancyGuard_init();
@@ -140,17 +131,10 @@ contract GaugeV2ALM is
     //============================== INTERNAL ==================================
 
     ///@notice deposit internal
-    function _deposit(
-        uint256 amount,
-        address owner
-    ) internal nonReentrant updateReward(owner) {
+    function _deposit(uint256 amount, address owner) internal nonReentrant updateReward(owner) {
         require(amount > 0, "deposit(Gauge): cannot stake 0");
 
-        IERC20Upgradeable(address(box)).safeTransferFrom(
-            owner,
-            address(this),
-            amount
-        );
+        IERC20Upgradeable(address(box)).safeTransferFrom(owner, address(this), amount);
         _balances[owner] = _balances[owner] + amount;
         _totalSupply = _totalSupply + amount;
 
@@ -160,10 +144,7 @@ contract GaugeV2ALM is
     }
 
     ///@notice withdraw internal
-    function _withdraw(
-        uint256 amount,
-        address owner
-    ) internal nonReentrant updateReward(owner) {
+    function _withdraw(uint256 amount, address owner) internal nonReentrant updateReward(owner) {
         require(amount > 0, "Cannot withdraw 0");
         require(_balances[owner] >= amount, "LB");
         require(_totalSupply >= amount, "supply");
@@ -180,10 +161,7 @@ contract GaugeV2ALM is
         emit Withdraw(owner, amount);
     }
 
-    function _updateLiquidity(
-        int24 _newTickLower,
-        int24 _newTickUpper
-    ) internal {
+    function _updateLiquidity(int24 _newTickLower, int24 _newTickUpper) internal {
         // Trident liquidity per share is updated when tokens are depositied / withdrawn in the
         // in the Trident ALM. Since liquidityPerShare is updated in the ALM, gauge must withdraw
         // the locked liquidity, collect reward and re-enter with latest staked liquidity.
@@ -203,20 +181,12 @@ contract GaugeV2ALM is
 
         //pull the current liquidity from the gauge
         if (_currentLiquidity > 0) {
-            gaugeCL.notifyERC20Withdraw(
-                _tickLower,
-                _tickUpper,
-                _currentLiquidity
-            );
+            gaugeCL.notifyERC20Withdraw(_tickLower, _tickUpper, _currentLiquidity);
         }
 
         //deploy new liquidity in the gauge
         if (_newLiquidity > 0) {
-            gaugeCL.notifyERC20Deposit(
-                _newTickLower,
-                _newTickUpper,
-                _newLiquidity
-            );
+            gaugeCL.notifyERC20Deposit(_newTickLower, _newTickUpper, _newLiquidity);
         }
 
         //update the new liquidity info
@@ -247,24 +217,17 @@ contract GaugeV2ALM is
             uint256 reward = gaugeCL.collectRewardForALM(tickLower, tickUpper);
 
             if (reward > 0) {
-                (
-                    uint256 rewardPerTokenGrowth,
-                    uint256 managementFeesGrowth
-                ) = _getRewardsGrowth(reward);
+                (uint256 rewardPerTokenGrowth, uint256 managementFeesGrowth) = _getRewardsGrowth(reward);
                 unchecked {
                     managementFees += managementFeesGrowth;
-                    rewardPerTokenStored =
-                        rewardPerTokenStored +
-                        rewardPerTokenGrowth;
+                    rewardPerTokenStored = rewardPerTokenStored + rewardPerTokenGrowth;
                 }
             }
         }
         lastUpdateTime = block.timestamp;
     }
 
-    function _getLatestStakedLiquidity(
-        uint256 _liquidityPerShare
-    ) internal view returns (uint128) {
+    function _getLatestStakedLiquidity(uint256 _liquidityPerShare) internal view returns (uint128) {
         return uint128(_totalSupply.mulDiv(_liquidityPerShare, PRECISION));
     }
 
@@ -277,9 +240,7 @@ contract GaugeV2ALM is
         }
     }
 
-    function _getRewardsGrowth(
-        uint256 reward
-    )
+    function _getRewardsGrowth(uint256 reward)
         internal
         view
         returns (uint256 rewardPerTokenGrowth, uint256 managementFeesGrowth)
@@ -317,28 +278,20 @@ contract GaugeV2ALM is
     }
 
     ///@notice transfer staked lp fee to the gaugeV2_CL
-    function claimFees()
-        external
-        nonReentrant
-        returns (uint256 claimed0, uint256 claimed1)
-    {
+    function claimFees() external nonReentrant returns (uint256 claimed0, uint256 claimed1) {
         require(address(gaugeCL) == msg.sender, "gaugeCL");
         // fees are update before transfer of lp tokens
         if (lBoxManager != address(0) && address(box) != address(0)) {
-            (claimed0, claimed1) = ILiquidBoxMinimal(lBoxManager).claimFees(
-                address(box),
-                address(gaugeCL)
-            );
+            (claimed0, claimed1) = ILiquidBoxMinimal(lBoxManager).claimFees(address(box), address(gaugeCL));
             emit ClaimFees(msg.sender, claimed0, claimed1);
         }
     }
 
-    function rebalanceGaugeLiquidity(
-        int24 newtickLower,
-        int24 newtickUpper,
-        uint128,
-        uint128
-    ) external nonReentrant updateReward(address(0)) {
+    function rebalanceGaugeLiquidity(int24 newtickLower, int24 newtickUpper, uint128, uint128)
+        external
+        nonReentrant
+        updateReward(address(0))
+    {
         require(address(box) == msg.sender, "!trident");
         _updateLiquidity(newtickLower, newtickUpper);
     }
@@ -349,9 +302,7 @@ contract GaugeV2ALM is
         _updateLiquidity(0, 0);
     }
 
-    function claimManagementFees(
-        address to
-    ) external nonReentrant returns (uint256 collectedfees) {
+    function claimManagementFees(address to) external nonReentrant returns (uint256 collectedfees) {
         require(address(box) == msg.sender, "!trident");
         require(to != address(0) && to != address(this), "to");
 
@@ -383,7 +334,7 @@ contract GaugeV2ALM is
     ///@notice reward for a single token
     function rewardPerToken() public view returns (uint256) {
         if (_totalSupply != 0) {
-            (uint256 rewardPerTokenGrowth, ) = _getRewardsGrowth(0);
+            (uint256 rewardPerTokenGrowth,) = _getRewardsGrowth(0);
             return rewardPerTokenStored + rewardPerTokenGrowth;
         }
         return rewardPerTokenStored;
@@ -392,18 +343,11 @@ contract GaugeV2ALM is
     ///@notice see earned rewards for user
     function earnedReward(address account) public view returns (uint256) {
         return
-            _balances[account].mulDiv(
-                rewardPerToken() - userRewardPerTokenPaid[account],
-                PRECISION
-            ) + rewards[account];
+            _balances[account].mulDiv(rewardPerToken() - userRewardPerTokenPaid[account], PRECISION) + rewards[account];
     }
 
     ///@notice see earned rewards for user
-    function earnedFees()
-        public
-        view
-        returns (uint256 amount0, uint256 amount1)
-    {
+    function earnedFees() public view returns (uint256 amount0, uint256 amount1) {
         return box.earnedFees(address(this));
     }
 
@@ -414,9 +358,7 @@ contract GaugeV2ALM is
     }
 
     ///@notice get amounts and liquidity for the staked lp token by an account
-    function getStakedAmounts(
-        address account
-    ) external view returns (uint256, uint256, uint256) {
+    function getStakedAmounts(address account) external view returns (uint256, uint256, uint256) {
         return box.getSharesAmount(_balances[account]);
     }
 }

@@ -42,12 +42,7 @@ import "./Epoch.sol";
  * For detailed function descriptions and reward distribution mechanisms, refer to protocol documentaion.
  */
 
-contract GaugeV2 is
-    IGaugeV2,
-    Initializable,
-    OwnableUpgradeable,
-    ReentrancyGuardUpgradeable
-{
+contract GaugeV2 is IGaugeV2, Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     using SafeCast for uint256;
     using SafeCast for int256;
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -127,8 +122,7 @@ contract GaugeV2 is
     RewardsInfo public override rewardsInfo;
 
     //private staked owner data
-    mapping(address owner => mapping(uint256 index => uint256))
-        private _ownedTokens;
+    mapping(address owner => mapping(uint256 index => uint256)) private _ownedTokens;
     mapping(uint256 tokenId => uint256) private _ownedTokensIndex;
     mapping(int24 => VirtualTick.Info) public ticks;
     mapping(int16 => uint256) public tickBitmap;
@@ -148,24 +142,11 @@ contract GaugeV2 is
 
     event Withdraw(address indexed user, uint256 tokenId, uint128 liquidity);
 
-    event IncreaseLiquidity(
-        address indexed user,
-        uint256 tokenId,
-        uint128 liquidity
-    );
+    event IncreaseLiquidity(address indexed user, uint256 tokenId, uint128 liquidity);
 
-    event DecreaseLiquidity(
-        address indexed user,
-        uint256 tokenId,
-        uint128 liquidity
-    );
+    event DecreaseLiquidity(address indexed user, uint256 tokenId, uint128 liquidity);
 
-    event Collect(
-        address indexed user,
-        uint256 tokenId,
-        address recipient,
-        uint256 rewardsOwed
-    );
+    event Collect(address indexed user, uint256 tokenId, address recipient, uint256 rewardsOwed);
 
     event ALMGaugeChanged(address indexed almGauge);
 
@@ -197,12 +178,8 @@ contract GaugeV2 is
         bool _isForPair
     ) public initializer {
         require(
-            _factory != address(0) &&
-                _pool != address(0) &&
-                _rewardToken != address(0) &&
-                _distribution != address(0) &&
-                _internal_bribe != address(0) &&
-                _nonfungiblePositionManager != address(0),
+            _factory != address(0) && _pool != address(0) && _rewardToken != address(0) && _distribution != address(0)
+                && _internal_bribe != address(0) && _nonfungiblePositionManager != address(0),
             "!zero address"
         );
 
@@ -219,9 +196,7 @@ contract GaugeV2 is
         gaugeFactory = IGaugeV2Factory(msg.sender);
         factory = IPearlV2Factory(_factory);
         pool = IPearlV2Pool(_pool);
-        nonfungiblePositionManager = INonfungiblePositionManager(
-            _nonfungiblePositionManager
-        );
+        nonfungiblePositionManager = INonfungiblePositionManager(_nonfungiblePositionManager);
         rewardToken = IERC20Upgradeable(_rewardToken);
 
         distribution = _distribution; // distro address (voter)
@@ -232,9 +207,7 @@ contract GaugeV2 is
             token0 = pool.token0();
             token1 = pool.token1();
             tickSpacing = pool.tickSpacing();
-            maxLiquidityPerTick = VirtualTick.tickSpacingToMaxLiquidityPerTick(
-                tickSpacing
-            );
+            maxLiquidityPerTick = VirtualTick.tickSpacingToMaxLiquidityPerTick(tickSpacing);
         }
     }
 
@@ -286,37 +259,26 @@ contract GaugeV2 is
     /// @inheritdoc IGaugeV2
     function deposit(uint256 tokenId) external {
         // transfer NFT
-        nonfungiblePositionManager.safeTransferFrom(
-            msg.sender,
-            address(this),
-            tokenId,
-            ""
-        );
+        nonfungiblePositionManager.safeTransferFrom(msg.sender, address(this), tokenId, "");
         //check onERC721Received for furhter logic
     }
 
     /// @notice Upon receiving a Pearl V2 ERC721, creates the token deposit setting owner to `from`. Also stakes token
     /// in one or more incentives if properly formatted `data` has a length > 0.
     /// @inheritdoc IERC721Receiver
-    function onERC721Received(
-        address,
-        address from,
-        uint256 tokenId,
-        bytes calldata
-    ) external override isStakingAllowed pullNFTFee(tokenId) returns (bytes4) {
+    function onERC721Received(address, address from, uint256 tokenId, bytes calldata)
+        external
+        override
+        isStakingAllowed
+        pullNFTFee(tokenId)
+        returns (bytes4)
+    {
         require(msg.sender == address(nonfungiblePositionManager), "NP");
 
         NFTPositionInfo memory info = _getPositionInfo(tokenId);
         require(info.liquidity != 0, "liquidity");
 
-        _deposit(
-            from,
-            tokenId,
-            info.tickLower,
-            info.tickUpper,
-            info.tick,
-            info.liquidity
-        );
+        _deposit(from, tokenId, info.tickLower, info.tickUpper, info.tick, info.liquidity);
 
         //update nft ownership tracker
         _addToken(from, tokenId);
@@ -326,11 +288,7 @@ contract GaugeV2 is
     }
 
     /// @inheritdoc IGaugeV2
-    function withdraw(
-        uint256 tokenId,
-        address to,
-        bytes memory data
-    )
+    function withdraw(uint256 tokenId, address to, bytes memory data)
         external
         nonReentrant
         onlyStaker(msg.sender, tokenId)
@@ -340,25 +298,12 @@ contract GaugeV2 is
         require(to != address(0) && to != address(this), "zero address");
         NFTPositionInfo memory info = _getPositionInfo(tokenId);
 
-        rewardsOwed = _withdraw(
-            msg.sender,
-            tokenId,
-            info.tickLower,
-            info.tickUpper,
-            info.tick,
-            info.liquidity,
-            true
-        );
+        rewardsOwed = _withdraw(msg.sender, tokenId, info.tickLower, info.tickUpper, info.tick, info.liquidity, true);
 
         //update nft ownership tracker
         _removeToken(msg.sender, tokenId);
 
-        nonfungiblePositionManager.safeTransferFrom(
-            address(this),
-            to,
-            tokenId,
-            data
-        );
+        nonfungiblePositionManager.safeTransferFrom(address(this), to, tokenId, data);
 
         emit Withdraw(msg.sender, tokenId, info.liquidity);
     }
@@ -366,59 +311,28 @@ contract GaugeV2 is
     /// @notice Increase the position liquidity
     /// @dev user can increase the liquidity using token ID
     /// @inheritdoc IGaugeV2
-    function increaseLiquidity(
-        INonfungiblePositionManager.IncreaseLiquidityParams memory params
-    )
+    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
         external
         payable
         nonReentrant
         onlyStaker(msg.sender, params.tokenId)
         pullNFTFee(params.tokenId)
     {
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 liquidityBefore,
-            ,
-            ,
-            ,
-
-        ) = nonfungiblePositionManager.positions(params.tokenId);
+        (,,,,,,, uint128 liquidityBefore,,,,) = nonfungiblePositionManager.positions(params.tokenId);
 
         uint256 _balance0 = balance0();
         uint256 _balance1 = balance1();
 
         //transfer tokens for the nonfungiblePositionManager's pearlV2MintCallback
         if (params.amount0Desired > 0) {
-            params.amount0Desired = _safeTransferFrom(
-                token0,
-                msg.sender,
-                address(this),
-                params.amount0Desired
-            );
+            params.amount0Desired = _safeTransferFrom(token0, msg.sender, address(this), params.amount0Desired);
 
-            IERC20Upgradeable(token0).forceApprove(
-                address(nonfungiblePositionManager),
-                params.amount0Desired
-            );
+            IERC20Upgradeable(token0).forceApprove(address(nonfungiblePositionManager), params.amount0Desired);
         }
 
         if (params.amount1Desired > 0) {
-            params.amount1Desired = _safeTransferFrom(
-                token1,
-                msg.sender,
-                address(this),
-                params.amount1Desired
-            );
-            IERC20Upgradeable(token1).forceApprove(
-                address(nonfungiblePositionManager),
-                params.amount1Desired
-            );
+            params.amount1Desired = _safeTransferFrom(token1, msg.sender, address(this), params.amount1Desired);
+            IERC20Upgradeable(token1).forceApprove(address(nonfungiblePositionManager), params.amount1Desired);
         }
 
         nonfungiblePositionManager.increaseLiquidity(params);
@@ -441,10 +355,7 @@ contract GaugeV2 is
         // Withdraw from the current position to claim rewards and
         // then re-enter the staking position with new liquidity.
         NFTPositionInfo memory position = _getPositionInfo(params.tokenId);
-        StakePosition.Info memory stakePosition = stakePos.get(
-            msg.sender,
-            params.tokenId
-        );
+        StakePosition.Info memory stakePosition = stakePos.get(msg.sender, params.tokenId);
         _updateLiquidity(params.tokenId, position, stakePosition);
 
         //net liquidity will always be positive as tokens are added in the pool
@@ -456,9 +367,7 @@ contract GaugeV2 is
     /// @notice Decrease the position liquidity
     /// @dev user can increase or decrease the liquidity using token ID
     /// @inheritdoc IGaugeV2
-    function decreaseLiquidity(
-        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
-    )
+    function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
         external
         nonReentrant
         onlyStaker(msg.sender, params.tokenId)
@@ -468,10 +377,7 @@ contract GaugeV2 is
         NFTPositionInfo memory position = _getPositionInfo(params.tokenId);
 
         //withdraw the liquity
-        StakePosition.Info memory stakePosition = stakePos.get(
-            msg.sender,
-            params.tokenId
-        );
+        StakePosition.Info memory stakePosition = stakePos.get(msg.sender, params.tokenId);
 
         // Execute an exit strategy to collect rewards and
         // subsequently re-enter the staking position with new liquidity.
@@ -495,53 +401,40 @@ contract GaugeV2 is
     // ====== ALM ERC20 ========
 
     /// @inheritdoc IGaugeV2
-    function notifyERC20Deposit(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidityDelta
-    ) external override nonReentrant isGaugeALM isStakingAllowed {
+    function notifyERC20Deposit(int24 tickLower, int24 tickUpper, uint128 liquidityDelta)
+        external
+        override
+        nonReentrant
+        isGaugeALM
+        isStakingAllowed
+    {
         require(liquidityDelta > 0, "LQ");
-        (, int24 tick, , , , , ) = pool.slot0();
+        (, int24 tick,,,,,) = pool.slot0();
 
-        _deposit(
-            msg.sender,
-            ALM_TOKENID,
-            tickLower,
-            tickUpper,
-            tick,
-            liquidityDelta
-        );
+        _deposit(msg.sender, ALM_TOKENID, tickLower, tickUpper, tick, liquidityDelta);
 
         emit IncreaseLiquidity(msg.sender, ALM_TOKENID, liquidityDelta);
     }
 
     /// @inheritdoc IGaugeV2
-    function notifyERC20Withdraw(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 liquidityDelta
-    ) external override nonReentrant isGaugeALM returns (uint256 rewardsOwed) {
+    function notifyERC20Withdraw(int24 tickLower, int24 tickUpper, uint128 liquidityDelta)
+        external
+        override
+        nonReentrant
+        isGaugeALM
+        returns (uint256 rewardsOwed)
+    {
         require(liquidityDelta > 0, "LQ");
-        (, int24 tick, , , , , ) = pool.slot0();
+        (, int24 tick,,,,,) = pool.slot0();
 
-        rewardsOwed = _withdraw(
-            msg.sender,
-            ALM_TOKENID,
-            tickLower,
-            tickUpper,
-            tick,
-            liquidityDelta,
-            true
-        );
+        rewardsOwed = _withdraw(msg.sender, ALM_TOKENID, tickLower, tickUpper, tick, liquidityDelta, true);
 
         emit DecreaseLiquidity(msg.sender, ALM_TOKENID, liquidityDelta);
     }
 
     /// @notice collect emission for token ID
     /// @inheritdoc IGaugeV2
-    function collectReward(
-        uint256 tokenId
-    )
+    function collectReward(uint256 tokenId)
         external
         nonReentrant
         onlyStaker(msg.sender, tokenId)
@@ -549,38 +442,25 @@ contract GaugeV2 is
         returns (uint256 rewardsOwed)
     {
         NFTPositionInfo memory nftInfo = _getPositionInfo(tokenId);
-        rewardsOwed = _collectReward(
-            tokenId,
-            msg.sender,
-            nftInfo.tickLower,
-            nftInfo.tickUpper,
-            true
-        );
+        rewardsOwed = _collectReward(tokenId, msg.sender, nftInfo.tickLower, nftInfo.tickUpper, true);
         emit Collect(msg.sender, tokenId, msg.sender, rewardsOwed);
     }
 
     /// @notice collect emission for alm gauge
-    function collectRewardForALM(
-        int24 tickLower,
-        int24 tickUpper
-    ) external nonReentrant isGaugeALM returns (uint256 rewardsOwed) {
-        rewardsOwed = _collectReward(
-            ALM_TOKENID,
-            msg.sender,
-            tickLower,
-            tickUpper,
-            true
-        );
+    function collectRewardForALM(int24 tickLower, int24 tickUpper)
+        external
+        nonReentrant
+        isGaugeALM
+        returns (uint256 rewardsOwed)
+    {
+        rewardsOwed = _collectReward(ALM_TOKENID, msg.sender, tickLower, tickUpper, true);
         emit Collect(msg.sender, ALM_TOKENID, msg.sender, rewardsOwed);
     }
 
     /// @notice Transitions to next tick when notified from the pool
     /// @dev The set of active ticks in the gauge must be a subset of the active ticks in the real pool
     /// @inheritdoc IGaugeV2
-    function crossTo(
-        int24 targetTick,
-        bool zeroForOne
-    ) external nonReentrant returns (bool) {
+    function crossTo(int24 targetTick, bool zeroForOne) external nonReentrant returns (bool) {
         require(address(pool) == msg.sender, "pool");
         _distributeRewards();
 
@@ -591,22 +471,16 @@ contract GaugeV2 is
         uint128 _liquidity = gaugeLiquidity;
         uint256 _rewardsGrowthGlobalX128 = rewardsGrowthGlobalX128;
 
-        bool isTrue = zeroForOne
-            ? _globalTick != TickMath.MIN_TICK
-            : _globalTick != TickMath.MAX_TICK - 1;
+        bool isTrue = zeroForOne ? _globalTick != TickMath.MIN_TICK : _globalTick != TickMath.MAX_TICK - 1;
 
         // The set of active ticks in the gauge must be a subset of the active ticks in the pool
         // so this loop will cross no more ticks than the pool
         while (isTrue) {
-            (tickNext, initialized) = tickBitmap
-                .nextInitializedTickWithinOneWord(
-                    _globalTick,
-                    tickSpacing,
-                    zeroForOne
-                );
+            (tickNext, initialized) = tickBitmap.nextInitializedTickWithinOneWord(_globalTick, tickSpacing, zeroForOne);
 
-            if (zeroForOne ? targetTick >= tickNext : targetTick < tickNext)
+            if (zeroForOne ? targetTick >= tickNext : targetTick < tickNext) {
                 break;
+            }
             // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
             if (tickNext < TickMath.MIN_TICK) {
                 tickNext = TickMath.MIN_TICK;
@@ -616,19 +490,15 @@ contract GaugeV2 is
 
             // if the tick is initialized, run the tick transition
             if (initialized) {
-                int128 liquidityNet = ticks.cross(
-                    tickNext,
-                    _rewardsGrowthGlobalX128
-                );
+                int128 liquidityNet = ticks.cross(tickNext, _rewardsGrowthGlobalX128);
 
                 // if we're moving leftward, we interpret liquidityNet as the opposite sign
                 // safe because liquidityNet cannot be type(int128).min
                 unchecked {
                     if (zeroForOne) liquidityNet = -liquidityNet;
 
-                    _liquidity = liquidityNet < 0
-                        ? _liquidity - uint128(-liquidityNet)
-                        : _liquidity + uint128(liquidityNet);
+                    _liquidity =
+                        liquidityNet < 0 ? _liquidity - uint128(-liquidityNet) : _liquidity + uint128(liquidityNet);
                 }
             }
 
@@ -651,10 +521,7 @@ contract GaugeV2 is
      * @param token Address of the reward token.
      * @param reward Amount of rewards to be acknowledged.
      */
-    function notifyRewardAmount(
-        address token,
-        uint256 reward
-    ) external override nonReentrant {
+    function notifyRewardAmount(address token, uint256 reward) external override nonReentrant {
         //emissions can only be distributed from main chain to pool chain
         // transfer the emisison if pool is not deployed on main chain
         require(msg.sender == distribution, "!distribution");
@@ -666,12 +533,7 @@ contract GaugeV2 is
             _updateEpochReward(reward);
         } else {
             // record the reward for distribution to pool chain gauge
-            reward = _safeTransferFrom(
-                address(rewardToken),
-                distribution,
-                address(this),
-                reward
-            );
+            reward = _safeTransferFrom(address(rewardToken), distribution, address(this), reward);
             pendingReward += reward;
             emit RewardAdded(reward, 0);
         }
@@ -689,10 +551,7 @@ contract GaugeV2 is
         pendingReward = 0; //reset reward
 
         uint256 dstChainId = lzPoolChainId;
-        address dstAddress = gaugeFactory.getTrustedRemoteAddress(
-            uint16(dstChainId),
-            address(this)
-        );
+        address dstAddress = gaugeFactory.getTrustedRemoteAddress(uint16(dstChainId), address(this));
 
         require(dstAddress != address(0), "!remote address");
 
@@ -718,28 +577,16 @@ contract GaugeV2 is
      * @param token Address of the reward token.
      * @param reward Amount of rewards to be credited.
      */
-    function notifyCredit(
-        uint16 srcChainId,
-        address initiator,
-        address,
-        address token,
-        uint256 reward
-    ) external nonReentrant {
+    function notifyCredit(uint16 srcChainId, address initiator, address, address token, uint256 reward)
+        external
+        nonReentrant
+    {
         // Recieve emissions only on the pool chain from main chain
-        require(
-            !isMainChain && (srcChainId == lzMainChainId),
-            "not allowed on main chain"
-        );
+        require(!isMainChain && (srcChainId == lzMainChainId), "not allowed on main chain");
 
-        require(
-            msg.sender == address(rewardToken) && token == address(rewardToken),
-            "!reward token"
-        );
+        require(msg.sender == address(rewardToken) && token == address(rewardToken), "!reward token");
 
-        address remoteAddress = gaugeFactory.getTrustedRemoteAddress(
-            srcChainId,
-            address(this)
-        );
+        address remoteAddress = gaugeFactory.getTrustedRemoteAddress(srcChainId, address(this));
 
         require(initiator == remoteAddress, "not remote caller");
         nonce += 1;
@@ -773,26 +620,18 @@ contract GaugeV2 is
         address _token1 = pool.token1();
 
         {
-            uint256 claimed0Before = IERC20Upgradeable(_token0).balanceOf(
-                address(this)
-            );
-            uint256 claimed1Before = IERC20Upgradeable(_token1).balanceOf(
-                address(this)
-            );
+            uint256 claimed0Before = IERC20Upgradeable(_token0).balanceOf(address(this));
+            uint256 claimed1Before = IERC20Upgradeable(_token1).balanceOf(address(this));
 
             //Re-used IGaugeV2 interface just for claiming fees
             (claimed0, claimed1) = IGaugeV2(gaugeAlm).claimFees();
 
             if (claimed0 > 0) {
-                claimed0 =
-                    IERC20Upgradeable(_token0).balanceOf(address(this)) -
-                    claimed0Before;
+                claimed0 = IERC20Upgradeable(_token0).balanceOf(address(this)) - claimed0Before;
             }
 
             if (claimed1 > 0) {
-                claimed1 =
-                    IERC20Upgradeable(_token1).balanceOf(address(this)) -
-                    claimed1Before;
+                claimed1 = IERC20Upgradeable(_token1).balanceOf(address(this)) - claimed1Before;
             }
         }
 
@@ -815,10 +654,8 @@ contract GaugeV2 is
 
     /// @notice poke the positions to claim fee
     /// @dev redeem fee fopr the inactive positions fee to be distributed to bribe contract
-    function poke(
-        uint256[] memory tokenIds
-    ) external onlyOwner isStakingAllowed {
-        for (uint8 i = 0; i < tokenIds.length; ) {
+    function poke(uint256[] memory tokenIds) external onlyOwner isStakingAllowed {
+        for (uint8 i = 0; i < tokenIds.length;) {
             uint256 id = tokenIds[i];
             //check if token is staked
             if (_ownedTokensIndex[id] == 0) {
@@ -854,20 +691,13 @@ contract GaugeV2 is
     function _checkStakingAllowed() internal view {
         // Enables staking either on the main chain with the same layer-zero chain ID
         // or gauges created on satellite chains.
-        require(
-            (isMainChain && lzMainChainId == lzPoolChainId) || !isMainChain,
-            "!staking"
-        );
+        require((isMainChain && lzMainChainId == lzPoolChainId) || !isMainChain, "!staking");
     }
 
     function _checkStaker(address owner, uint256 tokenId) internal view {
         _checkStakingAllowed();
         StakePosition.Info memory stakeInfo = stakePos.get(owner, tokenId);
-        require(
-            nonfungiblePositionManager.ownerOf(tokenId) == address(this) &&
-                stakeInfo.owner == owner,
-            "staker"
-        );
+        require(nonfungiblePositionManager.ownerOf(tokenId) == address(this) && stakeInfo.owner == owner, "staker");
     }
 
     function _checkGaugeALM() internal view {
@@ -883,12 +713,7 @@ contract GaugeV2 is
         // transfer token only for main chain pools, tokens are already recieved
         // for the satellite chain pool gauge
         if (isMainChain) {
-            reward = _safeTransferFrom(
-                address(rewardToken),
-                distribution,
-                address(this),
-                reward
-            );
+            reward = _safeTransferFrom(address(rewardToken), distribution, address(this), reward);
             // rewardToken.safeTransferFrom(DISTRIBUTION, address(this), reward);
         }
 
@@ -916,11 +741,7 @@ contract GaugeV2 is
         // very high values of rewardRate in the earned and rewardsPerToken functions;
         // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
         uint256 balance = rewardToken.balanceOf(address(this));
-        require(
-            rewardsInfo.rewardRate <=
-                FullMath.mulDiv(balance, PRECISION, epoch),
-            "Provided reward too high"
-        );
+        require(rewardsInfo.rewardRate <= FullMath.mulDiv(balance, PRECISION, epoch), "Provided reward too high");
 
         //reset the disbursed amount to zero
         rewardsInfo.disbursed = 0;
@@ -937,24 +758,15 @@ contract GaugeV2 is
         int24 tick,
         uint128 liquidityDelta
     ) internal {
-        StakePosition.Info storage stake = _updatePoolPosition(
-            owner,
-            tokenId,
-            tickLower,
-            tickUpper,
-            tick,
-            int128(liquidityDelta)
-        );
+        StakePosition.Info storage stake =
+            _updatePoolPosition(owner, tokenId, tickLower, tickUpper, tick, int128(liquidityDelta));
 
         // if liquidity was ZERO update stake position and user token mappings
         // skip increase liquidity from gaugeALM
         if (stake.liquidity == liquidityDelta) {
             //update ownership
             stake.owner = owner;
-            stake.rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(
-                tickLower,
-                tickUpper
-            );
+            stake.rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(tickLower, tickUpper);
         }
     }
 
@@ -968,23 +780,11 @@ contract GaugeV2 is
         bool isUnstake
     ) internal returns (uint256 rewardsOwed) {
         //collect reward
-        rewardsOwed = _collectReward(
-            tokenId,
-            owner,
-            tickLower,
-            tickUpper,
-            true
-        );
+        rewardsOwed = _collectReward(tokenId, owner, tickLower, tickUpper, true);
 
         //zero update for reward collection
-        StakePosition.Info storage stake = _updatePoolPosition(
-            owner,
-            tokenId,
-            tickLower,
-            tickUpper,
-            tick,
-            -int128(liquidityDelta)
-        );
+        StakePosition.Info storage stake =
+            _updatePoolPosition(owner, tokenId, tickLower, tickUpper, tick, -int128(liquidityDelta));
 
         if (isUnstake) stake.owner = address(0);
 
@@ -994,11 +794,9 @@ contract GaugeV2 is
         }
     }
 
-    function _updateLiquidity(
-        uint256 tokenId,
-        NFTPositionInfo memory position,
-        StakePosition.Info memory stakePosition
-    ) internal {
+    function _updateLiquidity(uint256 tokenId, NFTPositionInfo memory position, StakePosition.Info memory stakePosition)
+        internal
+    {
         // Withdraw from the position to claim rewards.
         // when new liquidity is zero or the staked position already has liquidity.
         if (position.liquidity == 0 || stakePosition.liquidity != 0) {
@@ -1015,14 +813,7 @@ contract GaugeV2 is
 
         if (position.liquidity != 0) {
             //re-enter the stake position with new liquidity
-            _deposit(
-                msg.sender,
-                tokenId,
-                position.tickLower,
-                position.tickUpper,
-                position.tick,
-                position.liquidity
-            );
+            _deposit(msg.sender, tokenId, position.tickLower, position.tickUpper, position.tick, position.liquidity);
         }
     }
 
@@ -1048,23 +839,11 @@ contract GaugeV2 is
         _distributeRewards();
 
         if (liquidityDelta != 0) {
-            flippedLower = ticks.update(
-                tickLower,
-                tick,
-                liquidityDelta,
-                rewardsGrowthGlobalX128,
-                false,
-                maxLiquidityPerTick
-            );
+            flippedLower =
+                ticks.update(tickLower, tick, liquidityDelta, rewardsGrowthGlobalX128, false, maxLiquidityPerTick);
 
-            flippedUpper = ticks.update(
-                tickUpper,
-                tick,
-                liquidityDelta,
-                rewardsGrowthGlobalX128,
-                true,
-                maxLiquidityPerTick
-            );
+            flippedUpper =
+                ticks.update(tickUpper, tick, liquidityDelta, rewardsGrowthGlobalX128, true, maxLiquidityPerTick);
 
             if (flippedLower) {
                 tickBitmap.flipTick(tickLower, tickSpacing);
@@ -1099,12 +878,10 @@ contract GaugeV2 is
         stake.update(liquidityDelta);
     }
 
-    function _safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 amount
-    ) internal returns (uint256 received) {
+    function _safeTransferFrom(address token, address from, address to, uint256 amount)
+        internal
+        returns (uint256 received)
+    {
         uint256 balanceBefore = IERC20Upgradeable(token).balanceOf(to);
         address weth9 = nonfungiblePositionManager.WETH9();
         if (token == weth9 && address(this).balance >= amount) {
@@ -1117,83 +894,46 @@ contract GaugeV2 is
         received = IERC20Upgradeable(token).balanceOf(to) - balanceBefore;
     }
 
-    function _getPositionInfo(
-        uint256 tokenId
-    ) internal view returns (NFTPositionInfo memory info) {
-        (
-            ,
-            ,
-            info.token0,
-            info.token1,
-            info.fee,
-            info.tickLower,
-            info.tickUpper,
-            info.liquidity,
-            ,
-            ,
-            ,
-
-        ) = nonfungiblePositionManager.positions(tokenId);
+    function _getPositionInfo(uint256 tokenId) internal view returns (NFTPositionInfo memory info) {
+        (,, info.token0, info.token1, info.fee, info.tickLower, info.tickUpper, info.liquidity,,,,) =
+            nonfungiblePositionManager.positions(tokenId);
         info.pool = factory.getPool(info.token0, info.token1, info.fee);
-        (, info.tick, , , , , ) = pool.slot0();
+        (, info.tick,,,,,) = pool.slot0();
         require(info.pool == address(pool), "!pool");
     }
 
-    function _getInnerRewardGrowth(
-        int24 tickLower,
-        int24 tickUpper
-    ) internal view returns (uint256 rewardsGrowthInsideLastX128) {
+    function _getInnerRewardGrowth(int24 tickLower, int24 tickUpper)
+        internal
+        view
+        returns (uint256 rewardsGrowthInsideLastX128)
+    {
         unchecked {
             RewardsInfo memory _info = rewardsInfo;
             uint256 _rewardsGrowthGlobalX128 = rewardsGrowthGlobalX128;
 
             //check if epoch period is finished
             if (_info.periodFinish > _info.lastUpdateTime) {
-                uint256 timeDelta = (
-                    (min256(block.timestamp, _info.periodFinish) -
-                        _info.lastUpdateTime)
-                );
+                uint256 timeDelta = ((min256(block.timestamp, _info.periodFinish) - _info.lastUpdateTime));
                 uint256 _liquidity = gaugeLiquidity;
                 if (timeDelta > 0 && _liquidity > 0) {
-                    uint256 rewards = FullMath.mulDiv(
-                        _info.rewardRate,
-                        timeDelta,
-                        PRECISION
-                    );
-                    _rewardsGrowthGlobalX128 += FullMath.mulDiv(
-                        rewards,
-                        FixedPoint128.Q128,
-                        _liquidity
-                    );
+                    uint256 rewards = FullMath.mulDiv(_info.rewardRate, timeDelta, PRECISION);
+                    _rewardsGrowthGlobalX128 += FullMath.mulDiv(rewards, FixedPoint128.Q128, _liquidity);
                 }
             }
 
-            rewardsGrowthInsideLastX128 = ticks.getRewardsGrowthInside(
-                tickLower,
-                tickUpper,
-                globalTick,
-                _rewardsGrowthGlobalX128
-            );
+            rewardsGrowthInsideLastX128 =
+                ticks.getRewardsGrowthInside(tickLower, tickUpper, globalTick, _rewardsGrowthGlobalX128);
         }
     }
 
-    function _getLatestReward(
-        int24 tickLower,
-        int24 tickUpper,
-        StakePosition.Info memory stake
-    )
+    function _getLatestReward(int24 tickLower, int24 tickUpper, StakePosition.Info memory stake)
         internal
         view
         returns (uint256 reward, uint256 rewardsGrowthInsideLastX128)
     {
-        rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(
-            tickLower,
-            tickUpper
-        );
+        rewardsGrowthInsideLastX128 = _getInnerRewardGrowth(tickLower, tickUpper);
         reward = FullMath.mulDiv(
-            rewardsGrowthInsideLastX128 - stake.rewardsGrowthInsideLastX128,
-            stake.liquidity,
-            FixedPoint128.Q128
+            rewardsGrowthInsideLastX128 - stake.rewardsGrowthInsideLastX128, stake.liquidity, FixedPoint128.Q128
         );
     }
 
@@ -1222,25 +962,15 @@ contract GaugeV2 is
         RewardsInfo memory _info = rewardsInfo;
         if (_info.periodFinish < _info.lastUpdateTime) return; // no distribution after epoch end
 
-        uint256 timeDelta = (
-            (min256(block.timestamp, _info.periodFinish) - _info.lastUpdateTime)
-        );
+        uint256 timeDelta = ((min256(block.timestamp, _info.periodFinish) - _info.lastUpdateTime));
 
         if (timeDelta == 0) return; // only once per block
 
         uint256 _liquidity = gaugeLiquidity;
-        uint256 rewards = FullMath.mulDiv(
-            _info.rewardRate,
-            timeDelta,
-            PRECISION
-        );
+        uint256 rewards = FullMath.mulDiv(_info.rewardRate, timeDelta, PRECISION);
 
         if (_liquidity > 0) {
-            rewardsGrowthGlobalX128 += FullMath.mulDiv(
-                rewards,
-                FixedPoint128.Q128,
-                gaugeLiquidity
-            );
+            rewardsGrowthGlobalX128 += FullMath.mulDiv(rewards, FixedPoint128.Q128, gaugeLiquidity);
         } else {
             rewardsInfo.liquidity0rewards += rewards;
         }
@@ -1248,21 +978,14 @@ contract GaugeV2 is
         rewardsInfo.lastUpdateTime = block.timestamp;
     }
 
-    function _collectReward(
-        uint256 tokenId,
-        address owner,
-        int24 tickLower,
-        int24 tickUpper,
-        bool isTransfer
-    ) internal returns (uint256 rewardsOwed) {
+    function _collectReward(uint256 tokenId, address owner, int24 tickLower, int24 tickUpper, bool isTransfer)
+        internal
+        returns (uint256 rewardsOwed)
+    {
         _distributeRewards();
         StakePosition.Info memory stakeInfo = stakePos.get(owner, tokenId);
         uint256 rewardsGrowthInsideLastX128;
-        (rewardsOwed, rewardsGrowthInsideLastX128) = _getLatestReward(
-            tickLower,
-            tickUpper,
-            stakeInfo
-        );
+        (rewardsOwed, rewardsGrowthInsideLastX128) = _getLatestReward(tickLower, tickUpper, stakeInfo);
 
         StakePosition.Info storage stake = stakePos.get(owner, tokenId);
 
@@ -1325,21 +1048,13 @@ contract GaugeV2 is
     /// @param to The destination of the transfer
     /// @param value The value to be transferred
     function _safeTransferETH(address to, uint256 value) internal {
-        (bool success, ) = to.call{value: value}(new bytes(0));
+        (bool success,) = to.call{value: value}(new bytes(0));
         require(success, "STE");
     }
 
     function _decreaseNftManagerAllowance(address token) internal {
-        if (
-            IERC20Upgradeable(token).allowance(
-                address(this),
-                address(nonfungiblePositionManager)
-            ) > 0
-        ) {
-            IERC20Upgradeable(token).safeDecreaseAllowance(
-                address(nonfungiblePositionManager),
-                0
-            );
+        if (IERC20Upgradeable(token).allowance(address(this), address(nonfungiblePositionManager)) > 0) {
+            IERC20Upgradeable(token).safeDecreaseAllowance(address(nonfungiblePositionManager), 0);
         }
     }
 
@@ -1366,19 +1081,12 @@ contract GaugeV2 is
      * @param tokenId nft tokenId of the owner
      * @return amount amount of claimable reward in reward token
      */
-    function getReward(
-        address owner,
-        uint256 tokenId
-    ) public view returns (uint256 amount) {
+    function getReward(address owner, uint256 tokenId) public view returns (uint256 amount) {
         StakePosition.Info memory stake = stakePos.get(owner, tokenId);
         amount = stake.rewardsOwed;
         if (stake.liquidity != 0) {
             NFTPositionInfo memory nftInfo = _getPositionInfo(tokenId);
-            (uint256 rewardsOwed, ) = _getLatestReward(
-                nftInfo.tickLower,
-                nftInfo.tickUpper,
-                stake
-            );
+            (uint256 rewardsOwed,) = _getLatestReward(nftInfo.tickLower, nftInfo.tickUpper, stake);
             amount += rewardsOwed;
         }
     }
@@ -1389,18 +1097,11 @@ contract GaugeV2 is
      * @param tickUpper upper range of the tick
      * @return amount amount of claimable reward in reward token
      */
-    function getRewardForALM(
-        int24 tickLower,
-        int24 tickUpper
-    ) external view returns (uint256 amount) {
+    function getRewardForALM(int24 tickLower, int24 tickUpper) external view returns (uint256 amount) {
         StakePosition.Info memory stake = stakePos.get(gaugeAlm, ALM_TOKENID);
         amount = stake.rewardsOwed;
         if (stake.liquidity != 0) {
-            (uint256 rewardsOwed, ) = _getLatestReward(
-                tickLower,
-                tickUpper,
-                stake
-            );
+            (uint256 rewardsOwed,) = _getLatestReward(tickLower, tickUpper, stake);
             amount += rewardsOwed;
         }
     }
@@ -1420,10 +1121,7 @@ contract GaugeV2 is
      * @param idx index opf the _ownedTokens mappings
      * @return tokenId tokenId mapped on the give index to repsective owner
      */
-    function tokenOfOwnerByIndex(
-        address owner,
-        uint256 idx
-    ) external view returns (uint256) {
+    function tokenOfOwnerByIndex(address owner, uint256 idx) external view returns (uint256) {
         if (idx >= balanceOf(owner)) {
             revert("NA");
         }

@@ -15,11 +15,7 @@ interface ICrossChainFactory {
      * @param _srcAddress The source address on the remote chain.
      * @param _destAddress The corresponding destination address on the local chain.
      */
-    function setTrustedRemoteAddress(
-        uint16 _remoteChainId,
-        address _srcAddress,
-        address _destAddress
-    ) external;
+    function setTrustedRemoteAddress(uint16 _remoteChainId, address _srcAddress, address _destAddress) external;
 
     /**
      * @notice Retrieves the trusted remote address for a given source address on a remote chain.
@@ -27,8 +23,5 @@ interface ICrossChainFactory {
      * @param srcAddress The source address on the remote chain.
      * @return The corresponding trusted destination address on the local chain.
      */
-    function getTrustedRemoteAddress(
-        uint16 chainId,
-        address srcAddress
-    ) external view returns (address);
+    function getTrustedRemoteAddress(uint16 chainId, address srcAddress) external view returns (address);
 }
