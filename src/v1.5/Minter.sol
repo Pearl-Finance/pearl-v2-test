@@ -40,7 +40,7 @@ contract Minter is IMinter, OwnableUpgradeable {
     IPearl public _pearl;
     IVoter public _voter;
     IVotingEscrow public _ve;
-    IRewardsDistributor public _rewards_distributor;
+    IRewardsDistributor public override _rewards_distributor;
 
     bool private _paused;
 

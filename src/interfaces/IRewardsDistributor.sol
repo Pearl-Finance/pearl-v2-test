@@ -27,4 +27,6 @@ interface IRewardsDistributor {
      * @return The claimable reward amount for the specified token ID.
      */
     function claimable(uint256 _tokenId) external view returns (uint256);
+
+    function claim(uint256 tokenId) external returns (uint256 amount);
 }

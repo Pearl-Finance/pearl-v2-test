@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "../interfaces/IRewardsDistributor.sol";
+
 /**
  * @title IMinter
  * @notice Interface for a Minter contract.
@@ -32,4 +34,6 @@ interface IMinter {
     function active_period() external view returns (uint256);
 
     function nextPeriod() external view returns (uint256);
+
+    function _rewards_distributor() external view returns (IRewardsDistributor);
 }

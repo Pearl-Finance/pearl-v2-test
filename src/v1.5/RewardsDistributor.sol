@@ -207,21 +207,21 @@ contract RewardsDistributor is Initializable, IRewardsDistributor {
         (amount, lastClaimEpochTimestamp) = _claimable(tokenId);
         lastTokenClaim[tokenId] = lastClaimEpochTimestamp;
 
-        if (amount == 0) {
-            revert NoClaimableAmount();
-        }
+        // if (amount == 0) {
+        //     revert NoClaimableAmount();
+        // }
 
         _tokenReserve -= amount;
-        if (ve.getRemainingVestingDuration(tokenId) == 0) {
-            address user = ve.ownerOf(tokenId);
-            ve.lockedToken().safeTransfer(user, amount);
-        } else {
-            ve.lockedToken().forceApprove(address(ve), amount);
-            ve.depositFor(tokenId, amount);
-        }
+        // if (ve.getRemainingVestingDuration(tokenId) == 0) {
+        //     // address user = ve.ownerOf(tokenId);
+        //     // ve.lockedToken().safeTransfer(user, amount);
+        // } else {
+        //     // ve.lockedToken().forceApprove(address(ve), amount);
+        //     // ve.depositFor(tokenId, amount);
+        // }
 
-        uint256 max_epoch = _currentEpochTimestamp() - 1;
-        emit Claimed(tokenId, amount, lastClaimEpochTimestamp, max_epoch);
+        // uint256 max_epoch = _currentEpochTimestamp() - 1;
+        // emit Claimed(tokenId, amount, lastClaimEpochTimestamp, max_epoch);
     }
 
     /**
