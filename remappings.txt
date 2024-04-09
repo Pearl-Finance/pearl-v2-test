@@ -1,2 +1,3 @@
 openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-08/contracts/
 openzeppelin/contracts/=lib/openzeppelin-08/contracts/
+@uniswap/=node_modules/@uniswap/

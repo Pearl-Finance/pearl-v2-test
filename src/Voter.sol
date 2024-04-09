@@ -546,8 +546,6 @@ contract Voter is IVoter, NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeabl
         require(totalWeight != 0, "no votes");
         IERC20Upgradeable(base).safeTransferFrom(msg.sender, address(this), amount);
         uint256 _ratio = (amount * PRECISION) / totalWeight; // PRECISION adjustment is removed during claim
-        console.log(amount, "amount");
-        console.log(_ratio, "ratio");
 
         if (_ratio != 0) {
             index += _ratio;

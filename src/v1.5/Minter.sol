@@ -215,7 +215,6 @@ contract Minter is IMinter, OwnableUpgradeable {
                 IPearl pearl = _pearl;
 
                 uint256 _gauge = _weekly - _rebase - _teamEmissions;
-                console.log(_gauge, "kik");
 
                 uint256 _balanceOf = pearl.balanceOf(address(this));
                 if (_balanceOf < _required) {

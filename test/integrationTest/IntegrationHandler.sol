@@ -106,12 +106,37 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     }
 
     mapping(uint256 => uint256) public amountLocked;
+    mapping(address => uint256) public gaugeNftCount;
+    mapping(address => mapping(uint256 => address)) public gaugeNftOwner;
+    mapping(address => mapping(uint256 => address)) public liquidityInGauge;
+    mapping(address => mapping(address => uint256)) public nftOwnerInGauge;
 
-    function mintNFT(uint256 amount, uint256 duration, uint256 actorSeed) public createActor countCall("mint") {
+    function deposit() external createActor countCall("Deposit") {
+        vm.startPrank(currentActor);
+        // poolID = bound(poolID, 0, pools.length - 1);
+
+        address gauge_ = voter.gauges(pools[0]);
+        if (nftOwnerInGauge[currentActor][gauge_] == 0) {
+            (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, pools[0], currentActor);
+
+            IERC721(nonfungiblePositionManager).approve(gauge_, tokenId);
+            GaugeV2(payable(gauge_)).deposit(tokenId);
+
+            // gaugeNftCount[gauge_] == gaugeNftCount[gauge_] + 1;
+            nftOwnerInGauge[currentActor][gauge_] = tokenId;
+            gaugeNftOwner[gauge_][tokenId] = currentActor;
+            vm.stopPrank();
+        }
+    }
+
+    function mintNFT(uint256 amount, uint256 duration, uint256 actorSeed)
+        public
+        useActor(actorSeed)
+        countCall("Mint")
+    {
         if (ids[currentActor] == 0 && currentActor != address(0)) {
             ghost_actualMint++;
             amount = bound(amount, 0, type(uint8).max);
-
             duration = bound(amount, 2 weeks, 2 * 52 weeks);
 
             if (amount != 0 && !IEpochController(epochController).checkDistribution()) {
@@ -128,7 +153,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
                 );
 
                 ghost_veNftCount++;
-                // assert(success0);
+                assert(success0);
 
                 uint256 id = abi.decode(data, (uint256));
                 amountLocked[id] = IVotingEscrow(ve).getLockedAmount(id);
@@ -141,22 +166,18 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         }
     }
 
-    function vote(uint256 actorSeed, uint256 weight, uint256 poolID)
-        public
-        useActor(actorSeed)
-        countCall("set reward")
-    {
+    function vote(uint256 actorSeed, uint256 weight) public useActor(actorSeed) countCall("Vote") {
         weight = 1;
-        poolID = bound(poolID, 0, pools.length - 1);
+        // poolID = bound(poolID, 0, pools.length - 1);
 
         if (weight > 0) {
             address[] memory _poolVote = new address[](1);
-            _poolVote[0] = pools[poolID];
+            _poolVote[0] = pools[0];
 
             uint256[] memory _weights = new uint256[](1);
             _weights[0] = weight;
 
-            address gauge_ = voter.gauges(pools[poolID]);
+            address gauge_ = voter.gauges(pools[0]);
             Bribe b = Bribe(voter.external_bribes(address(gauge_)));
 
             uint256 vote = IVotingEscrow(ve).getVotes(currentActor);
@@ -168,9 +189,9 @@ contract Handler is CommonBase, StdCheats, StdUtils {
                 vm.stopPrank();
 
                 if (hasVoted[currentActor]) {
-                    userVotes(currentActor, previousBalance, true, b, pools[poolID]);
+                    userVotes(currentActor, previousBalance, true, b, pools[0]);
                 } else {
-                    userVotes(currentActor, 0, false, b, pools[poolID]);
+                    userVotes(currentActor, 0, false, b, pools[0]);
                 }
 
                 hasVoted[currentActor] = true;
@@ -181,40 +202,40 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     bool firstTime;
 
     function distribute() external countCall("Distribute") {
-        if (ghost_usersVote > 0) {
-            uint256 _weekly;
+        // if (ghost_usersVote > 0) {
+        //     uint256 _weekly;
 
-            if (!firstTime) {
-                _weekly = weekly;
-                firstTime = true;
-            } else {
-                weekly = weekly_emission();
-                _weekly = weekly;
-            }
+        //     if (!firstTime) {
+        //         _weekly = weekly;
+        //         firstTime = true;
+        //     } else {
+        //         weekly = weekly_emission();
+        //         _weekly = weekly;
+        //     }
 
-            uint256 _rebase = calculate_rebase(_weekly);
-            uint256 _teamEmissions = (_weekly * teamRate) / PRECISION;
-            uint256 gaugesReward = _weekly - _rebase - _teamEmissions;
+        //     uint256 _rebase = calculate_rebase(_weekly);
+        //     uint256 _teamEmissions = (_weekly * teamRate) / PRECISION;
+        //     uint256 gaugesReward = _weekly - _rebase - _teamEmissions;
 
-            uint256 _ratio = (gaugesReward * 1e18) / voter.totalWeight();
-            uint256 index = voter.index();
-            index += _ratio;
-            gaugesReward = _updateFor(index);
+        //     uint256 _ratio = (gaugesReward * 1e18) / voter.totalWeight();
+        //     uint256 index = voter.index();
+        //     index += _ratio;
+        //     gaugesReward = _updateFor(index);
 
-            ghost_rebaseRewards += _rebase;
-            ghost_teamEmissions += _teamEmissions;
-            ghost_totalGaugesRewards += gaugesReward;
+        //     ghost_rebaseRewards += _rebase;
+        //     ghost_teamEmissions += _teamEmissions;
+        //     ghost_totalGaugesRewards += gaugesReward;
 
-            vm.warp(block.timestamp + minter.nextPeriod());
-            epochController.distribute();
+        //     vm.warp(block.timestamp + minter.nextPeriod());
+        //     epochController.distribute();
 
-            if (IEpochController(epochController).checkDistribution()) {
-                // finish distribution
-                while (IEpochController(epochController).checkDistribution()) {
-                    epochController.distribute();
-                }
-            }
-        }
+        //     if (IEpochController(epochController).checkDistribution()) {
+        //         // finish distribution
+        //         while (IEpochController(epochController).checkDistribution()) {
+        //             epochController.distribute();
+        //         }
+        //     }
+        // }
     }
 
     // function claimDistributionRewards(uint256 tokenID) external {
@@ -247,56 +268,54 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     //     }
     // }
 
-    // function deposit(uint256 poolID, uint256 actorSeed) external createActor countCall("Deposit") {
-    //     poolID = bound(poolID, 0, pools.length - 1);
-    //     address gauge_ = voter.gauges(pools[poolID]);
-
-    //     (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, pools[poolID]);
-
-    //     IERC721(nonfungiblePositionManager).approve(gauge_, tokenId);
-    //     GaugeV2(payable(gauge_)).deposit(tokenId);
-    // }
-
     // function test_withdraw() public {
     //     poolID = bound(poolID, 0, poolID.length - 1);
     //     address gauge_ = voter.gauges(pools[poolID]);
     //     GaugeV2(gauge_).withdraw(tokenId, address(this), "0x");
     // }
 
-    // function addLiquidity(uint256 poolID) external {
+    function increaseLiquidity(uint256 actorSeed) external useActor(actorSeed) countCall("Increase Liquidity") {
+        // poolID = bound(poolID, 0, pools.length - 1);
+        address gauge_ = voter.gauges(pools[0]);
+        uint256 tokenID = nftOwnerInGauge[currentActor][gauge_];
+        // bound(tokenID, 0, gaugeNftCount[gauge_]);
 
-    //     vm.startPrank(usdcHolder);
-    //     IERC20(usdc).transfer(address(this), 1 ether);
-    //     vm.stopPrank();
+        if (tokenID != 0) {
+            // currentActor = gaugeNftOwner[gauge_][tokenID];
+            address token0 = IPearlV2Pool(pools[0]).token0();
+            address token1 = IPearlV2Pool(pools[0]).token1();
+            vm.startPrank(gaugeNftOwner[gauge_][tokenID]);
 
-    //     vm.startPrank(daiHolder);
-    //     IERC20(dai).transfer(address(this), 1 ether);
-    //     vm.stopPrank();
+            deal(address(token0), currentActor, 1 ether);
+            deal(address(token1), currentActor, 1 ether);
 
-    //     IERC20(dai).approve(gauge_, 1 ether);
-    //     IERC20(usdc).approve(gauge_, 1 ether);
+            IERC20(token0).approve(gauge_, 1 ether);
+            IERC20(token1).approve(gauge_, 1 ether);
 
-    //     INonfungiblePositionManager.IncreaseLiquidityParams memory params = INonfungiblePositionManager
-    //         .IncreaseLiquidityParams({
-    //         tokenId: tokenId,
-    //         amount0Desired: 1 ether,
-    //         amount1Desired: 1 ether,
-    //         amount0Min: 0,
-    //         amount1Min: 0,
-    //         deadline: block.timestamp
-    //     });
+            INonfungiblePositionManager.IncreaseLiquidityParams memory params = INonfungiblePositionManager
+                .IncreaseLiquidityParams({
+                tokenId: tokenID,
+                amount0Desired: 1 ether,
+                amount1Desired: 1 ether,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: block.timestamp
+            });
 
-    //     GaugeV2(gauge_).increaseLiquidity(params);
-    // }
+            GaugeV2(payable(gauge_)).increaseLiquidity(params);
+            vm.stopPrank();
+        }
+    }
 
-    // function test_decreaseLiquidity() public {
-    //     poolID = bound(poolID, 0, poolID.length - 1);
-    //     address gauge_ = voter.gauges(pools[poolID]);
+    // function test_decreaseLiquidity(uint actorSeed) public useActor(actorSeed) countCall("Increase Liquidity")  {
+    //     // poolID = bound(poolID, 0, poolID.length - 1);
+    //     address gauge_ = voter.gauges(pools[0]);
+    //     uint256 tokenID = nftOwnerInGauge[currentActor][gauge_];
 
     //     INonfungiblePositionManager.DecreaseLiquidityParams
     //         memory params = INonfungiblePositionManager
     //             .DecreaseLiquidityParams({
-    //                 tokenId: tokenId,
+    //                 tokenId: tokenID,
     //                 liquidity: liquidityToAdd,
     //                 amount0Min: 0,
     //                 amount1Min: 0,
@@ -306,15 +325,15 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     //     GaugeV2(gauge_).decreaseLiquidity(params);
     // }
 
-    function mintNewPosition(uint256 amount0ToAdd, uint256 amount1ToAdd, address _pool)
+    function mintNewPosition(uint256 amount0ToAdd, uint256 amount1ToAdd, address _pool, address user)
         private
         returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
     {
         address token0 = IPearlV2Pool(_pool).token0();
         address token1 = IPearlV2Pool(_pool).token1();
 
-        deal(address(token0), address(this), amount1ToAdd);
-        deal(address(token1), address(this), amount0ToAdd);
+        deal(address(token0), user, amount0ToAdd);
+        deal(address(token1), user, amount1ToAdd);
 
         IERC20(token0).approve(nonfungiblePositionManager, amount0ToAdd);
         IERC20(token1).approve(nonfungiblePositionManager, amount1ToAdd);
@@ -323,13 +342,13 @@ contract Handler is CommonBase, StdCheats, StdUtils {
             token0: token0,
             token1: token1,
             fee: 100,
-            tickLower: -887272,
-            tickUpper: 887272,
+            tickLower: (-887272 / 1) * 1,
+            tickUpper: (887272 / 1) * 1,
             amount0Desired: amount0ToAdd,
             amount1Desired: amount1ToAdd,
             amount0Min: 0,
             amount1Min: 0,
-            recipient: address(this),
+            recipient: user,
             deadline: block.timestamp
         });
 
