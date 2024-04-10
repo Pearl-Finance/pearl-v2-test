@@ -21,6 +21,8 @@ import {MathUpgradeable} from "openzeppelin/contracts-upgradeable/utils/math/Mat
 import {IERC721} from "openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {INonfungiblePositionManager} from "../../src/interfaces/dex/INonfungiblePositionManager.sol";
+import {TickMath} from "../../src/libraries/TickMath.sol";
+import {LiquidityAmounts} from "../../src/libraries/LiquidityAmounts.sol";
 
 contract Handler is CommonBase, StdCheats, StdUtils {
     using LibAddressSet for AddressSet;
@@ -108,7 +110,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     mapping(uint256 => uint256) public amountLocked;
     mapping(address => uint256) public gaugeNftCount;
     mapping(address => mapping(uint256 => address)) public gaugeNftOwner;
-    mapping(address => mapping(uint256 => address)) public liquidityInGauge;
+    mapping(address => mapping(address => uint256)) public ghost_liquidityInGauge;
     mapping(address => mapping(address => uint256)) public nftOwnerInGauge;
 
     function deposit() external createActor countCall("Deposit") {
@@ -116,13 +118,16 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         // poolID = bound(poolID, 0, pools.length - 1);
 
         address gauge_ = voter.gauges(pools[0]);
+
         if (nftOwnerInGauge[currentActor][gauge_] == 0) {
             (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, pools[0], currentActor);
+            ghost_liquidityInGauge[currentActor][gauge_] = liquidityToAdd;
 
             IERC721(nonfungiblePositionManager).approve(gauge_, tokenId);
             GaugeV2(payable(gauge_)).deposit(tokenId);
 
             // gaugeNftCount[gauge_] == gaugeNftCount[gauge_] + 1;
+            ghost_userLiquidity[currentActor][gauge_] = liquidityToAdd;
             nftOwnerInGauge[currentActor][gauge_] = tokenId;
             gaugeNftOwner[gauge_][tokenId] = currentActor;
             vm.stopPrank();
@@ -268,15 +273,28 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     //     }
     // }
 
-    // function test_withdraw() public {
-    //     poolID = bound(poolID, 0, poolID.length - 1);
-    //     address gauge_ = voter.gauges(pools[poolID]);
-    //     GaugeV2(gauge_).withdraw(tokenId, address(this), "0x");
-    // }
+    function withdraw(uint128 liquidityToRemove, uint256 actorSeed)
+        external
+        useActor(actorSeed)
+        countCall("Withdraw")
+    {
+        address payable gauge_ = payable(voter.gauges(pools[0]));
+        uint256 tokenID = nftOwnerInGauge[currentActor][gauge_];
+        (, uint128 liquidity,,) = GaugeV2(gauge_).stakePos(keccak256(abi.encodePacked(currentActor, tokenID)));
+
+        if (tokenID != 0 && liquidity != 0) {
+            vm.startPrank(currentActor);
+            nftOwnerInGauge[currentActor][gauge_] = 0;
+            GaugeV2(gauge_).withdraw(tokenID, currentActor, "0x");
+            ghost_userLiquidity[currentActor][gauge_] = ghost_userLiquidity[currentActor][gauge_] - liquidity;
+            vm.stopPrank();
+        }
+    }
 
     function increaseLiquidity(uint256 actorSeed) external useActor(actorSeed) countCall("Increase Liquidity") {
         // poolID = bound(poolID, 0, pools.length - 1);
-        address gauge_ = voter.gauges(pools[0]);
+        // address
+        address payable gauge_ = payable(voter.gauges(pools[0]));
         uint256 tokenID = nftOwnerInGauge[currentActor][gauge_];
         // bound(tokenID, 0, gaugeNftCount[gauge_]);
 
@@ -284,10 +302,25 @@ contract Handler is CommonBase, StdCheats, StdUtils {
             // currentActor = gaugeNftOwner[gauge_][tokenID];
             address token0 = IPearlV2Pool(pools[0]).token0();
             address token1 = IPearlV2Pool(pools[0]).token1();
+
             vm.startPrank(gaugeNftOwner[gauge_][tokenID]);
+            // ghost_liquidityInGauge[currentActor][gauge_] = ghost_liquidityInGauge[currentActor][gauge_] + liquidityToAdd;
 
             deal(address(token0), currentActor, 1 ether);
             deal(address(token1), currentActor, 1 ether);
+
+            (uint160 sqrtRatioX96,,,,,,) = IPearlV2Pool(pools[0]).slot0();
+
+            int24 tickLower = (-887272 / 1) * 1;
+            int24 tickUpper = (887272 / 1) * 1;
+
+            uint128 liquid = LiquidityAmounts.getLiquidityForAmounts(
+                sqrtRatioX96,
+                TickMath.getSqrtRatioAtTick(tickLower),
+                TickMath.getSqrtRatioAtTick(tickUpper),
+                1 ether,
+                1 ether
+            );
 
             IERC20(token0).approve(gauge_, 1 ether);
             IERC20(token1).approve(gauge_, 1 ether);
@@ -302,28 +335,49 @@ contract Handler is CommonBase, StdCheats, StdUtils {
                 deadline: block.timestamp
             });
 
-            GaugeV2(payable(gauge_)).increaseLiquidity(params);
+            (, uint128 liquidityBeforeTx,,) =
+                GaugeV2(gauge_).stakePos(keccak256(abi.encodePacked(currentActor, tokenID)));
+
+            GaugeV2(gauge_).increaseLiquidity(params);
             vm.stopPrank();
+
+            (, uint128 liquidityAfterTx,,) =
+                GaugeV2(gauge_).stakePos(keccak256(abi.encodePacked(currentActor, tokenID)));
+
+            uint128 liquidityAdded = liquidityAfterTx - liquidityBeforeTx;
+            ghost_userLiquidity[currentActor][gauge_] = ghost_userLiquidity[currentActor][gauge_] + liquidityAdded;
+
+            assert(liquidityAfterTx == ghost_userLiquidity[currentActor][gauge_]);
         }
     }
 
-    // function test_decreaseLiquidity(uint actorSeed) public useActor(actorSeed) countCall("Increase Liquidity")  {
-    //     // poolID = bound(poolID, 0, poolID.length - 1);
-    //     address gauge_ = voter.gauges(pools[0]);
-    //     uint256 tokenID = nftOwnerInGauge[currentActor][gauge_];
+    mapping(address => mapping(address => uint256)) public ghost_userLiquidity;
 
-    //     INonfungiblePositionManager.DecreaseLiquidityParams
-    //         memory params = INonfungiblePositionManager
-    //             .DecreaseLiquidityParams({
-    //                 tokenId: tokenID,
-    //                 liquidity: liquidityToAdd,
-    //                 amount0Min: 0,
-    //                 amount1Min: 0,
-    //                 deadline: block.timestamp
-    //             });
+    function decreaseLiquidity(uint256 liquidityToRemove, uint256 actorSeed)
+        public
+        useActor(actorSeed)
+        countCall("decrease Liquidity")
+    {
+        address gauge_ = voter.gauges(pools[0]);
+        liquidityToRemove = bound(liquidityToRemove, 0, ghost_userLiquidity[currentActor][gauge_]);
+        uint256 tokenID = nftOwnerInGauge[currentActor][gauge_];
 
-    //     GaugeV2(gauge_).decreaseLiquidity(params);
-    // }
+        if (currentActor != address(0) && liquidityToRemove != 0) {
+            INonfungiblePositionManager.DecreaseLiquidityParams memory params = INonfungiblePositionManager
+                .DecreaseLiquidityParams({
+                tokenId: tokenID,
+                liquidity: uint128(liquidityToRemove),
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: block.timestamp
+            });
+
+            vm.startPrank(currentActor);
+            GaugeV2(payable(gauge_)).decreaseLiquidity(params);
+            ghost_userLiquidity[currentActor][gauge_] = ghost_userLiquidity[currentActor][gauge_] - liquidityToRemove;
+            vm.stopPrank();
+        }
+    }
 
     function mintNewPosition(uint256 amount0ToAdd, uint256 amount1ToAdd, address _pool, address user)
         private
@@ -498,5 +552,9 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         }
 
         return (_weeklyMint * lockedShare) / PRECISION;
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 }

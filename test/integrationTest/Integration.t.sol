@@ -230,6 +230,7 @@ contract IntegrationTest is Test, Bytes {
         voterL1.setEpochController(address(epochController));
 
         pearlV2Factory.grantRole(keccak256("GAUGE_MANAGER"), address(voterL1));
+        uint256 numberOfAssets = bound(type(uint8).max, 0, 100);
 
         for (uint256 i = 0; i < 1; i++) {
             TestERC20 tokenX = new TestERC20();
@@ -253,12 +254,14 @@ contract IntegrationTest is Test, Bytes {
             pools
         );
 
-        bytes4[] memory selectors = new bytes4[](5);
+        bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = Handler.deposit.selector;
         selectors[1] = Handler.mintNFT.selector;
         selectors[2] = Handler.vote.selector;
         selectors[3] = Handler.distribute.selector;
         selectors[4] = Handler.increaseLiquidity.selector;
+        selectors[5] = Handler.decreaseLiquidity.selector;
+        selectors[6] = Handler.withdraw.selector;
         // selectors[3] = Handler.claimDistributionRewards.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
@@ -271,6 +274,8 @@ contract IntegrationTest is Test, Bytes {
     function invariant_veNftCountIsSame() external {
         assertEq(votingEscrow.totalSupply(), handler.ghost_veNftCount());
     }
+
+    // function invariant_userLiquidityInGaugeIsSame() external {}
 
     function invariant_rewardsDistribution() external {
         assertEq(nativeOFT.balanceOf(address(this)), handler.ghost_teamEmissions());
