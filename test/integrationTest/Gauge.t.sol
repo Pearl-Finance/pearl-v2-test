@@ -45,67 +45,64 @@ import {LZEndpointMock} from
 
 contract GaugeInvariantTest is Test, Bytes {
     WETH9 public weth;
-    PearlV2Pool public pearlV2Pool;
-    PearlV2Factory public pearlV2Factory;
-    INonfungiblePositionManager public nonfungiblePositionManager;
-
-    Voter public voterL1;
-    Voter public voterL2;
+    TestERC20 tERC20X;
 
     Bribe public bribe;
+    Voter public voterL1;
 
+    Voter public voterL2;
+    Minter public minter;
+
+    Handler public handler;
     GaugeV2 public gaugeV2;
+
+    TestERC20 public tERC20;
     GaugeV2 public gaugeV2L2;
 
+    VotingEscrow votingEscrow;
     LiquidBox public liquidBox;
+
+    VotingEscrowVesting vesting;
     LiquidBox public liquidBoxL2;
 
     GaugeV2ALM public gaugeV2ALM;
+    OFTMockToken public otherOFT;
+
+    OFTMockToken public nativeOFT;
     GaugeV2ALM public gaugeV2ALML2;
 
-    OFTMockToken public otherOFT;
-    OFTMockToken public nativeOFT;
+    PearlV2Pool public pearlV2Pool;
+    BribeFactory public bribeFactoryL1;
 
-    Minter public minter;
-    VotingEscrow votingEscrow;
-    VotingEscrowVesting vesting;
+    BribeFactory public bribeFactoryL2;
+    PearlV2Factory public pearlV2Factory;
 
     EpochController public epochController;
-    RewardsDistributor public rewardsDistributor;
-
-    BribeFactory public bribeFactoryL1;
-    BribeFactory public bribeFactoryL2;
-
     GaugeV2Factory public gaugeV2FactoryL1;
+
     GaugeV2Factory public gaugeV2FactoryL2;
-
     LZEndpointMock public lzEndPointMockL1;
+
     LZEndpointMock public lzEndPointMockL2;
-
     LiquidBoxFactory public liquidBoxFactory;
+
     LiquidBoxManager public liquidBoxManager;
-
     LiquidBoxFactory public liquidBoxFactoryL2;
-    LiquidBoxManager public liquidBoxManagerL2;
 
-    TestERC20 public tERC20;
-    TestERC20 tERC20X;
-    Handler public handler;
+    LiquidBoxManager public liquidBoxManagerL2;
+    RewardsDistributor public rewardsDistributor;
+    INonfungiblePositionManager public nonfungiblePositionManager;
 
     address[] box;
     address[] gauges;
     address[] public pools;
 
+    address pool;
     address router;
 
     uint256 public mainChainId;
     uint16 public lzMainChainId;
     uint16 public lzPoolChainId;
-
-    uint256 internal constant ONE = 1;
-    mapping(bytes32 => Position.Info) public positions;
-
-    address pool;
 
     function setUp() public {
         tERC20 = new TestERC20();
@@ -309,21 +306,18 @@ contract GaugeInvariantTest is Test, Bytes {
         }
     }
 
-    // function invariant_claimedFeeToInternalBribeIsSame() external {
-    //     for (uint256 g; g < gauges.length; ++g) {
-    //         address internalBribe = voterL1.internal_bribes(voterL1.gauges(pools[g]));
-    //         (uint256 amount0, uint256 amount1) = handler.ghost_internalBribeBalance(internalBribe);
+    function invariant_claimedFeeToInternalBribeIsSame() external {
+        for (uint256 g; g < gauges.length; ++g) {
+            address internalBribe = voterL1.internal_bribes(voterL1.gauges(pools[g]));
+            (uint256 amount0, uint256 amount1) = handler.ghost_internalBribeBalance(internalBribe);
 
-    //         uint256 internalBribeBal0 = IERC20(IPearlV2Pool(pools[g]).token0()).balanceOf(internalBribe);
-    //         uint256 internalBribeBal1 = IERC20(IPearlV2Pool(pools[g]).token1()).balanceOf(internalBribe);
+            uint256 internalBribeBal0 = IERC20(IPearlV2Pool(pools[g]).token0()).balanceOf(internalBribe);
+            uint256 internalBribeBal1 = IERC20(IPearlV2Pool(pools[g]).token1()).balanceOf(internalBribe);
 
-    //         console.log(amount0, internalBribeBal0);
-    //         console.log(amount1, internalBribeBal1);
-
-    //         assertEq(amount0, internalBribeBal0);
-    //         assertEq(amount1, internalBribeBal1);
-    //     }
-    // }
+            assertEq(amount0, internalBribeBal0);
+            assertEq(amount1, internalBribeBal1);
+        }
+    }
 
     function invariant_userLiquidityInGaugeIsSame() external {
         address[] memory actors = handler.actors();

@@ -33,11 +33,9 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     Voter public voter;
 
     GaugeV2 public gauge;
-
     IMinter public minter;
 
     AddressSet internal _actors;
-
     OFTMockToken public nativeOFT;
     IEpochController public epochController;
 
@@ -72,36 +70,40 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     address boxCurrentActor;
 
     address lzEndPointMockL1;
-    address nonfungiblePositionManager;
+    uint256 public ghost_zeroVote;
 
-    uint256 public ghost_zeroAmountOrDistributionInProgress;
+    uint256 public ghost_zeroVotes;
     uint256 public ghost_mintedSum;
 
     uint256 public ghost_usersVote;
     uint256 public ghost_veNftCount;
 
+    uint256 public ghost_actualVote;
     uint256 public ghost_actualMint;
+
+    uint256 public ghost_actualSwap;
     uint256 public ghost_rebaseRewards;
 
     uint256 public ghost_teamEmissions;
-    uint256 public ghost_totalGaugesRewards;
+    address nonfungiblePositionManager;
 
     uint256 public ghost_tokenIdIsZero;
-    uint256 public ghost_tokenIdOrLiquidityIsZero;
-
-    uint256 public ghost_tokenIdIsZeroOrIsContract;
-    uint256 public ghost_addressOrLiquidityToRemoveOrTokenIdIsZero;
-
-    uint256 public ghost_zeroVote;
-    uint256 public ghost_zeroVotes;
-    uint256 public ghost_actualVote;
-    uint256 public ghost_actualSwap;
     uint256 public ghost_actualDeposit;
+
     uint256 public ghost_actualWithdraw;
     uint256 public ghost_actualDistribute;
+
+    uint256 public ghost_totalGaugesRewards;
     uint256 public ghost_actualDecreaseLiquidity;
+
     uint256 public ghost_actualIncreaseLiquidity;
+    uint256 public ghost_tokenIdOrLiquidityIsZero;
+
     uint256 public ghost_idsIsNotZeroOrZeroAddress;
+    uint256 public ghost_tokenIdIsZeroOrIsContract;
+
+    uint256 public ghost_zeroAmountOrDistributionInProgress;
+    uint256 public ghost_addressOrLiquidityToRemoveOrTokenIdIsZero;
 
     int24 tickLower = 6931;
     int24 tickUpper = 27081;
@@ -182,28 +184,21 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         }
     }
 
-    function claimFeesInGauge(uint256 poolID, uint256 actorSeed)
-        external
-        useActor(actorSeed)
-        countCall("Claim Fees In Gauge")
-    {
-        // poolID = bound(poolID, 0, pools.length - 1);
-        // address gauge_ = voter.gauges(pools[poolID]);
+    function claimFeesInGauge(uint256 poolID) external countCall("Claim Fees In Gauge") {
+        poolID = bound(poolID, 0, pools.length - 1);
+        address gauge_ = voter.gauges(pools[poolID]);
 
-        // address internalBribes = voter.internal_bribes(gauge_);
-        // (uint256 claimed0, uint256 claimed1) = GaugeV2(payable(gauge_)).claimFees();
+        address internalBribes = voter.internal_bribes(gauge_);
+        (uint256 claimed0, uint256 claimed1) = GaugeV2(payable(gauge_)).claimFees();
 
-        // ghost_internalBribeBalance[internalBribes].amount0 =
-        //     ghost_internalBribeBalance[internalBribes].amount0 + claimed0;
+        ghost_internalBribeBalance[internalBribes].amount0 =
+            ghost_internalBribeBalance[internalBribes].amount0 + claimed0;
 
-        // ghost_internalBribeBalance[internalBribes].amount1 =
-        //     ghost_internalBribeBalance[internalBribes].amount0 + claimed1;
+        ghost_internalBribeBalance[internalBribes].amount1 =
+            ghost_internalBribeBalance[internalBribes].amount1 + claimed1;
 
-        // uint256 internalBribeBal0 = IERC20(IPearlV2Pool(pools[poolID]).token0()).balanceOf(internalBribes);
-        // uint256 internalBribeBal1 = IERC20(IPearlV2Pool(pools[poolID]).token1()).balanceOf(internalBribes);
-
-        // assert(ghost_internalBribeBalance[internalBribes].amount0 == internalBribeBal0);
-        // assert(ghost_internalBribeBalance[internalBribes].amount1 == internalBribeBal1);
+        ghost_amount0Fee[pools[poolID]] = ghost_amount0Fee[pools[poolID]] - claimed0;
+        ghost_amount1Fee[pools[poolID]] = ghost_amount1Fee[pools[poolID]] - claimed1;
     }
 
     function mintNFT(uint256 amount, uint256 duration, uint256 actorSeed)
@@ -292,11 +287,11 @@ contract Handler is CommonBase, StdCheats, StdUtils {
                 _weekly = weekly;
                 firstTime = true;
             } else {
-                weekly = weekly_emission();
+                weekly = _weeklyEmission();
                 _weekly = weekly;
             }
 
-            uint256 _rebase = calculate_rebase(_weekly);
+            uint256 _rebase = _calculateRebase(_weekly);
             uint256 _teamEmissions = (_weekly * teamRate) / PRECISION;
             uint256 gaugesReward = _weekly - _rebase - _teamEmissions;
 
@@ -541,6 +536,11 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         console.log("Distribute(s)", ghost_actualDistribute);
         console.log("Decrease Liquidity(s)", ghost_actualDecreaseLiquidity);
         console.log("Increase Liquidity(s)", ghost_actualIncreaseLiquidity);
+        console.log("Claim Fees In Gauge(s)", calls["Claim Fees In Gauge"]);
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 
     function __mint(address addr, uint256 amount) internal {
@@ -550,14 +550,14 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         vm.stopPrank();
     }
 
-    function weekly_emission() public view returns (uint256) {
+    function _weeklyEmission() internal view returns (uint256) {
         uint256 calculate_emission = (weekly * emission) / PRECISION;
         uint256 circulating_supply = nativeOFT.totalSupply() - nativeOFT.balanceOf(ve);
         circulating_supply = (circulating_supply * 2) / PRECISION;
         return MathUpgradeable.max(circulating_supply, calculate_emission);
     }
 
-    function calculate_rebase(uint256 _weeklyMint) public view returns (uint256) {
+    function _calculateRebase(uint256 _weeklyMint) internal view returns (uint256) {
         uint256 _veTotal = nativeOFT.balanceOf(address(ve));
         uint256 _pearlTotal = nativeOFT.totalSupply();
 
@@ -708,9 +708,5 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
         ghost_amount0Fee[pools[poolID]] = ghost_amount0Fee[pools[poolID]] + tokensOwed0;
         ghost_amount1Fee[pools[poolID]] = ghost_amount1Fee[pools[poolID]] + tokensOwed1;
-    }
-
-    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
-        return this.onERC721Received.selector;
     }
 }
