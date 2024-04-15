@@ -124,4 +124,6 @@ interface IGaugeV2ALM {
      * @return Address of the ALM box.
      */
     function getBox() external view returns (address);
+
+    function deposit(uint256 amount) external;
 }
