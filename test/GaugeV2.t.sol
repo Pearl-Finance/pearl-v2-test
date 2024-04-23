@@ -27,7 +27,6 @@ contract GaugeV2Test is Imports {
 
     function test_deposit() public {
         (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, address(pool), address(this));
-
         IERC721(address(nonfungiblePositionManager)).approve(address(gaugeV2), tokenId);
 
         (address owner, uint128 liquidityAdded,,) =
@@ -90,7 +89,6 @@ contract GaugeV2Test is Imports {
     function test_increaseLiquidity() public {
         (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, address(pool), address(this));
         IERC721(address(nonfungiblePositionManager)).approve(address(gaugeV2), tokenId);
-
         gaugeV2.deposit(tokenId);
 
         address token0 = IPearlV2Pool(pool).token0();
@@ -101,16 +99,15 @@ contract GaugeV2Test is Imports {
 
         IERC20(token0).approve(address(gaugeV2), 1 ether);
         IERC20(token1).approve(address(gaugeV2), 1 ether);
+        (uint160 sqrtRatioX96,,,,,,) = IPearlV2Pool(pool).slot0();
 
-        //Todo: assert liquidityToBeAdded is correct
-
-        // uint256 liquidity_ = LiquidityAmounts.getLiquidityForAmounts(
-        //     sqrtP(currentPrice),
-        //     sqrtP60FromTick(lowerTick),
-        //     sqrtP60FromTick(upperTick),
-        //     params.amount0Desired,
-        //     params.amount1Desired
-        // );
+        uint256 liquidity_ = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtRatioX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            1 ether,
+            1 ether
+        );
 
         INonfungiblePositionManager.IncreaseLiquidityParams memory params = INonfungiblePositionManager
             .IncreaseLiquidityParams({
@@ -122,15 +119,11 @@ contract GaugeV2Test is Imports {
             deadline: block.timestamp
         });
 
-        (, uint128 liquidity,,) = gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
-
+        (, uint128 LiquidityBeforeTx,,) = gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
         gaugeV2.increaseLiquidity(params);
 
-        (, liquidityToAdd,,) = gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
-
-        // assertEq(liquidityToAdd, liquidity + (1998999749874 - 999499874937));
-
-        //Todo:replace 1998999749874 - 999499874937 with liquidityToBeAdded
+        (, uint128 liquidityAfterTx,,) = gaugeV2.stakePos(keccak256(abi.encodePacked(address(this), tokenId)));
+        assertEq(LiquidityBeforeTx + liquidity_, liquidityAfterTx);
     }
 
     function test_decreaseLiquidity() public {
