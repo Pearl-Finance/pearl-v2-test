@@ -25,6 +25,14 @@ contract GaugeV2Test is Imports {
         gaugeV2 = GaugeV2(payable(voterL1.createGauge{value: 0.1 ether}(address(pool), "0x")));
     }
 
+    function test_setDistribution() public {
+        vm.startPrank(address(gaugeV2FactoryL1));
+        assertEq(gaugeV2.distribution(), address(voterL1));
+        gaugeV2.setDistribution(address(1));
+        assertEq(gaugeV2.distribution(), address(1));
+        vm.stopPrank();
+    }
+
     function test_deposit() public {
         (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, address(pool), address(this));
         IERC721(address(nonfungiblePositionManager)).approve(address(gaugeV2), tokenId);
@@ -43,27 +51,28 @@ contract GaugeV2Test is Imports {
         assertEq(gaugeV2.stakedBalance(address(this)), 1);
     }
 
-    function test_claim_reward() public {
-        vote((address(pool)));
-        (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, address(pool), address(this));
+    function test_claimReward() public {
+        vm.startPrank(address(1));
+        vote(address(pool), address(1));
 
+        (uint256 tokenId, uint128 liquidityToAdd,,) = mintNewPosition(1 ether, 1 ether, address(pool), address(1));
         vm.warp(block.timestamp + minter.nextPeriod());
+
         epochController.distribute();
+        console.log(nativeOFT.balanceOf(address(1)), "beforeTx");
 
         IERC721(address(nonfungiblePositionManager)).approve(address(gaugeV2), tokenId);
-
         gaugeV2.deposit(tokenId);
-        console.log(nativeOFT.balanceOf(address(this)), "before");
 
         vm.warp(block.timestamp + 1 hours);
-
         gaugeV2.collectReward(tokenId);
-        console.log(nativeOFT.balanceOf(address(this)), "after");
+
+        console.log(nativeOFT.balanceOf(address(1)), "afterTx");
+        vm.stopPrank();
     }
 
     function test_distribution() public {
-        vote(address(pool));
-
+        vote(address(pool), address(this));
         console.log(nativeOFT.balanceOf(address(this)), "before");
 
         vm.warp(block.timestamp + minter.nextPeriod());
@@ -152,13 +161,12 @@ contract GaugeV2Test is Imports {
         assertEq(liquidityAdded, 0);
     }
 
-    function vote(address _pool) private {
-        nativeOFT.mint(address(this), 2 ether);
+    function vote(address _pool, address user) private {
+        nativeOFT.mint(user, 2 ether);
         nativeOFT.approve(address(votingEscrow), 2 ether);
 
-        (bool success0,) = address(votingEscrow).call(
-            abi.encodeWithSignature("mint(address,uint256,uint256)", address(this), 1 ether, 3 weeks)
-        );
+        (bool success0,) =
+            address(votingEscrow).call(abi.encodeWithSignature("mint(address,uint256,uint256)", user, 1 ether, 3 weeks));
         assert(success0);
 
         address[] memory addr = new address[](1);
