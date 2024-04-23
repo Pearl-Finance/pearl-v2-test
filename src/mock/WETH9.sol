@@ -73,6 +73,8 @@ contract WETH9 {
 
         return true;
     }
+
+    function testExcluded() public {}
 }
 
 /*

@@ -1,424 +1,476 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
+
+import "./utils/Imports.sol";
+
+/**
+ * @title Uint Test For GaugeV2 Contract
+ * @author c-n-o-t-e
+ * @dev Contract is used to test out BribeFactory Contract
+ *
+ * Functionalities Tested: All external/public functions.
+ */
+
+contract GaugeInvariantTest is Imports {
+    function setUp() public {
+        l1SetUp();
+    }
 
-// import {Voter} from "../src/Voter.sol";
-// import {Minter} from "../src/v1.5/Minter.sol";
-// import {IBribe} from "../src/interfaces/IBribe.sol";
-// import {IPearl} from "../src/interfaces/IPearl.sol";
-// import {Pearl} from "pearl-token/src/token/Pearl.sol";
-// import {BribeFactory} from "../src/v1.5/BribeFactory.sol";
-// import {Test, console2 as console} from "forge-std/Test.sol";
-// import {IERC20} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
-// import {VotingEscrow} from "pearl-token/src/governance/VotingEscrow.sol";
-// import {SafeERC20} from "openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-// import {ERC1967Proxy} from "openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-// import {VotingEscrowVesting} from "pearl-token/src/governance/VotingEscrowVesting.sol";
+    function test_AssertInitialization() public {
+        assertEq(bribeFactory.keeper(), address(this));
+        assertEq(bribeFactory.voter(), address(voterL1));
+        assertEq(bribeFactory.ustb(), address(nativeOFT));
+        assertEq(bribeFactory.bribeAdmin(), address(this));
+        assertEq(bribeFactory.defaultRewardToken(0), address(nativeOFT));
+        assertEq(bribeFactory.isDefaultRewardToken(address(nativeOFT)), true);
+    }
+
+    function testShouldCreateBribe() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(3), address(6), "_type"
+        );
+
+        assertEq(bribeFactory.recentBribe(), bribe);
+        assertEq(Bribe(bribe).rewardTokens(1), address(3));
+
+        assertEq(Bribe(bribe).rewardTokens(2), address(6));
+        assertEq(Bribe(bribe).rewardTokens(0), address(nativeOFT));
+    }
+
+    function testShouldSetVoter() public {
+        address newVoter = makeAddr("newVoter");
+        bribeFactory.setVoter(newVoter);
+        assertEq(bribeFactory.voter(), newVoter);
+    }
+
+    function testShouldSetKeeper() public {
+        address newKeeper = makeAddr("newKeeper");
+        bribeFactory.setKeeper(newKeeper);
+        assertEq(bribeFactory.keeper(), newKeeper);
+    }
+
+    function testShouldSetBribeImplementation() public {
+        address newBribeImplementation = makeAddr("newBribeImplementation");
+        bribeFactory.setBribeImplementation(newBribeImplementation);
+        assertEq(bribeFactory.bribeImplementation(), newBribeImplementation);
+    }
+
+    function testShouldAddDefaultRewardToken() public {
+        address newToken = makeAddr("newToken");
+        bribeFactory.pushDefaultRewardToken(newToken);
+
+        assertEq(bribeFactory.defaultRewardToken(1), newToken);
+        assertEq(bribeFactory.isDefaultRewardToken(newToken), true);
+    }
+
+    function testShouldRemoveDefaultRewardToken() public {
+        address newToken = makeAddr("newToken");
+        address newToken0 = makeAddr("newToken0");
+
+        bribeFactory.pushDefaultRewardToken(newToken);
+        bribeFactory.pushDefaultRewardToken(newToken0);
+
+        assertEq(bribeFactory.defaultRewardToken(1), newToken);
+        assertEq(bribeFactory.isDefaultRewardToken(newToken), true);
+
+        bribeFactory.removeDefaultRewardToken(newToken);
+        assertEq(bribeFactory.defaultRewardToken(1), newToken0);
+        assertEq(bribeFactory.isDefaultRewardToken(newToken), false);
+    }
+
+    function testShouldFailIfAddressIsZero() public {
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Zero_Address_Not_Allowed.selector));
+        bribeFactory.pushDefaultRewardToken(address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Zero_Address_Not_Allowed.selector));
+        bribeFactory.setBribeAdmin(address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Zero_Address_Not_Allowed.selector));
+        bribeFactory.setVoter(address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Zero_Address_Not_Allowed.selector));
+        bribeFactory.setKeeper(address(0));
+
+        vm.expectRevert("!zero address");
+        bribeFactory.setBribeImplementation(address(0));
+
+        address[] memory addr = new address[](1);
+        addr[0] = address(nativeOFT);
+
+        BribeFactory b = new BribeFactory(mainChainId);
+
+        bytes memory init =
+            abi.encodeCall(BribeFactory.initialize, (address(this), address(0), address(0), address(0), addr));
+
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Zero_Address_Not_Allowed.selector));
+        new ERC1967Proxy(address(b), init);
+
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(bribeFactory), address(3), address(6), "_type"
+        );
+
+        address[] memory bribes = new address[](1);
+        bribes[0] = bribe;
+
+        vm.expectRevert("!voter");
+        bribeFactory.setBribeVoter(bribes, address(0));
+
+        vm.expectRevert("!minter");
+        bribeFactory.setBribeMinter(bribes, address(0));
+
+        vm.expectRevert("!owner");
+        bribeFactory.setBribeOwner(bribes, address(0));
+    }
+
+    function testShouldFailIfTokenAlreadyExist() public {
+        address newToken = makeAddr("newToken");
+        bribeFactory.pushDefaultRewardToken(newToken);
+
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Token_Already_Added.selector));
+        bribeFactory.pushDefaultRewardToken(newToken);
+    }
+
+    function testShouldSetBribeAdmin() public {
+        assertEq(bribeFactory.bribeAdmin(), address(this));
+        bribeFactory.setBribeAdmin(address(1));
+        assertEq(bribeFactory.bribeAdmin(), address(1));
+    }
+
+    function testShouldFailIfTokenIsNotRewardToken() public {
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Not_A_Default_Reward_Token.selector));
+        bribeFactory.removeDefaultRewardToken(makeAddr("newToken"));
+    }
+
+    function testShouldFailIfNotOwnerOrVoter() public {
+        vm.startPrank(address(9));
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_NotAuthorized.selector));
+
+        bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(3), address(3), "_type"
+        );
+
+        vm.stopPrank();
+    }
 
-// /**
-//  * @title Uint Test For Bribe Factory Contract
-//  * @author c-n-o-t-e
-//  * @dev
-//  *
-//  *
-//  */
+    function testShouldFailIfTokenIsTheSame() public {
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Tokens_Cannot_Be_The_Same.selector));
 
-// contract BribeFactoryTest is Test {
-//     error BribeFactory_Mismatch_Length();
-//     error BribeFactory_Token_Already_Added();
-//     error BribeFactory_Zero_Address_Not_Allowed();
-//     error BribeFactory_Tokens_Cannot_Be_The_Same();
-//     error BribeFactory_Not_A_Default_Reward_Token();
+        bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(3), address(3), "_type"
+        );
+    }
 
-//     Voter public voter;
-//     Pearl public pearl;
-//     Minter public minter;
-//     BribeFactory public bribeFactory;
-//     VotingEscrowVesting vesting;
+    function testShouldAddRewardTokenToBribeContract() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
 
-//     function setUp() public {
-//         address votingEscrowProxyAddress = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 6);
+        bribeFactory.addRewardToBribe(makeAddr("rewardToken"), bribe);
+        assertEq(Bribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+    }
 
-//         address factoryProxyAddress = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 8);
+    function testShouldAddRewardTokensToBribeContract() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
 
-//         pearl = new Pearl(block.chainid, address(0));
-//         bytes memory init = abi.encodeCall(pearl.initialize, (address(7)));
+        address[] memory addr = new address[](2);
+        addr[0] = makeAddr("rewardToken");
 
-//         ERC1967Proxy pearlProxy = new ERC1967Proxy(address(pearl), init);
-//         pearl = Pearl(address(pearlProxy));
+        addr[1] = makeAddr("rewardToken1");
+        bribeFactory.addRewardsToBribe(addr, bribe);
 
-//         VotingEscrow votingEscrowImpl = new VotingEscrow(address(pearlProxy));
-//         voter = new Voter();
+        assertEq(Bribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+        assertEq(Bribe(bribe).rewardTokens(2), makeAddr("rewardToken1"));
+    }
 
-//         init =
-//             abi.encodeCall(voter.initialize, (address(votingEscrowImpl), address(1), address(2), factoryProxyAddress));
-//         ERC1967Proxy voterProxy = new ERC1967Proxy(address(voter), init);
-//         voter = Voter(address(voterProxy));
+    function testShouldAddRewardTokenToBribeContractsWhenCreated() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId,
+            lzMainChainId,
+            address(1),
+            address(this),
+            makeAddr("rewardToken"),
+            makeAddr("rewardToken0"),
+            "_type"
+        );
 
-//         vesting = new VotingEscrowVesting(votingEscrowProxyAddress);
+        assertEq(bribeFactory.recentBribe(), bribe);
+        assertEq(Bribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+        assertEq(Bribe(bribe).rewardTokens(2), makeAddr("rewardToken0"));
+    }
 
-//         init = abi.encodeCall(votingEscrowImpl.initialize, (address(vesting), address(5), address(0)));
+    function testShouldSetConvertData() public {
+        (address target, bytes4 selc) = bribeFactory.convertData(address(1));
+        assertEq(selc, 0x0);
 
-//         ERC1967Proxy votingEscrowProxy = new ERC1967Proxy(address(votingEscrowImpl), init);
+        bytes4 selector = bytes4(keccak256(bytes("functionName(uint256,address,address)")));
+        bribeFactory.setConvertData(address(1), selector);
 
-//         address[] memory addr = new address[](1);
-//         addr[0] = address(pearl);
+        (target, selc) = bribeFactory.convertData(address(1));
+        assertEq(selc, selector);
+    }
 
-//         voter.setVotingEscrow(address(votingEscrowProxy));
-//         voter._initialize(addr, address(8));
+    function testShouldAddRewardTokenToBribeContracts() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
 
-//         bribeFactory = new BribeFactory();
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(this), address(0), address(0), "_type"
+        );
 
-//         init = abi.encodeCall(BribeFactory.initialize, (address(voter), addr));
+        assertEq(bribeFactory.recentBribe(), bribe0);
+
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//         ERC1967Proxy mainProxy = new ERC1967Proxy(address(bribeFactory), init);
-//         bribeFactory = BribeFactory(address(mainProxy));
+        bribeFactory.addRewardToBribes(makeAddr("rewardToken"), bribes);
 
-//         minter = new Minter();
+        assertEq(Bribe(bribes[0]).rewardTokens(1), makeAddr("rewardToken"));
+        assertEq(Bribe(bribes[1]).rewardTokens(1), makeAddr("rewardToken"));
+    }
 
-//         init = abi.encodeCall(Minter.initialize, (address(voter), address(votingEscrowProxy), address(88)));
+    function testShouldAddRewardsTokenToBribeContracts() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(bribeFactory), address(0), address(0), "_type"
+        );
+
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(bribeFactory), address(0), address(0), "_type"
+        );
+
+        address[] memory bribes = new address[](2);
+
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//         ERC1967Proxy minterProxy = new ERC1967Proxy(address(minter), init);
-//         minter = Minter(address(minterProxy));
-//     }
+        address[][] memory rewards = new address[][](2);
+        rewards[0] = new address[](2);
+        rewards[1] = new address[](2);
 
-//     function test_AssertInitialization() public {
-//         assertEq(bribeFactory.voter(), address(voter));
-//         assertEq(bribeFactory.hasRole(0x00, address(this)), true);
+        rewards[0][0] = makeAddr("rewardToken");
+        rewards[0][1] = makeAddr("rewardToken0");
 
-//         assertEq(bribeFactory.defaultRewardToken(0), address(pearl));
-//         assertEq(bribeFactory.isDefaultRewardToken(address(pearl)), true);
+        rewards[1][0] = makeAddr("rewardToken");
+        rewards[1][1] = makeAddr("rewardToken0");
 
-//         assertEq(bribeFactory.hasRole(keccak256("BRIBE_ADMIN"), address(this)), true);
-//     }
+        bribeFactory.addRewardsToBribes(rewards, bribes);
 
-//     //////////////////////////////////  ONLY OWNER INTERACTIONS //////////////////////////////////
+        assertEq(Bribe(bribe).rewardTokens(0), address(nativeOFT));
+        assertEq(Bribe(bribe0).rewardTokens(0), address(nativeOFT));
 
-//     function test_BribeDeployment() public {
-//         address bribe = bribeFactory.createBribe(address(1), address(3), address(6), "_type");
-//         assertEq(bribeFactory.last_bribe(), bribe);
-//     }
+        assertEq(Bribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
+        assertEq(Bribe(bribe0).rewardTokens(1), makeAddr("rewardToken"));
 
-//     function test_SetVoter() public {
-//         address newVoter = makeAddr("newVoter");
-//         bribeFactory.setVoter(newVoter);
-//         assertEq(bribeFactory.voter(), newVoter);
-//     }
+        assertEq(Bribe(bribe).rewardTokens(2), makeAddr("rewardToken0"));
+        assertEq(Bribe(bribe0).rewardTokens(2), makeAddr("rewardToken0"));
+    }
 
-//     function test_AddDefaultRewardToken() public {
-//         address newToken = makeAddr("newToken");
-//         bribeFactory.pushDefaultRewardToken(newToken);
+    function testShouldSetBribeVoter() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(this), address(0), address(0), "_type"
+        );
 
-//         assertEq(bribeFactory.defaultRewardToken(1), newToken);
-//         assertEq(bribeFactory.isDefaultRewardToken(newToken), true);
-//     }
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//     function test_RemoveDefaultRewardToken() public {
-//         address newToken = makeAddr("newToken");
-//         bribeFactory.pushDefaultRewardToken(newToken);
+        assertEq(Bribe(bribe).voter(), address(voterL1));
+        assertEq(Bribe(bribe0).voter(), address(voterL1));
 
-//         assertEq(bribeFactory.defaultRewardToken(0), address(pearl));
-//         bribeFactory.removeDefaultRewardToken(address(pearl));
+        bribeFactory.setBribeVoter(bribes, makeAddr("voter"));
 
-//         assertEq(bribeFactory.defaultRewardToken(0), newToken);
-//         assertEq(bribeFactory.isDefaultRewardToken(address(pearl)), false);
-//     }
+        assertEq(Bribe(bribe).voter(), makeAddr("voter"));
+        assertEq(Bribe(bribe0).voter(), makeAddr("voter"));
+    }
 
-//     function test_ShouldFailIfAddressIsZero() public {
-//         vm.expectRevert(abi.encodeWithSelector(BribeFactory_Zero_Address_Not_Allowed.selector));
-//         bribeFactory.pushDefaultRewardToken(address(0));
+    function testShouldSetBribeMinter() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(this), address(0), address(0), "_type"
+        );
 
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//         address[] memory bribes = new address[](1);
-//         bribes[0] = bribe;
+        assertEq(Bribe(bribe).minter(), address(minter));
+        assertEq(Bribe(bribe0).minter(), address(minter));
 
-//         vm.expectRevert();
-//         bribeFactory.setBribeVoter(bribes, address(0));
+        bribeFactory.setBribeMinter(bribes, makeAddr("minter"));
 
-//         vm.expectRevert();
-//         bribeFactory.setBribeMinter(bribes, address(0));
+        assertEq(Bribe(bribe).minter(), makeAddr("minter"));
+        assertEq(Bribe(bribe0).minter(), makeAddr("minter"));
+    }
 
-//         vm.expectRevert();
-//         bribeFactory.setBribeOwner(bribes, address(0));
-//     }
+    function testShouldSetBribeOwner() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(bribeFactory), address(0), address(0), "_type"
+        );
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(bribeFactory), address(0), address(0), "_type"
+        );
 
-//     function test_ShouldFailIfTokenAlreadyExist() public {
-//         address newToken = makeAddr("newToken");
-//         bribeFactory.pushDefaultRewardToken(newToken);
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//         vm.expectRevert(abi.encodeWithSelector(BribeFactory_Token_Already_Added.selector));
-//         bribeFactory.pushDefaultRewardToken(newToken);
-//     }
+        assertEq(Bribe(bribe).owner(), address(bribeFactory));
+        assertEq(Bribe(bribe0).owner(), address(bribeFactory));
 
-//     function test_ShouldFailIfTokenIsNotRewardToken() public {
-//         vm.expectRevert(abi.encodeWithSelector(BribeFactory_Not_A_Default_Reward_Token.selector));
-//         bribeFactory.removeDefaultRewardToken(makeAddr("newToken"));
-//     }
+        bribeFactory.setBribeOwner(bribes, makeAddr("owner0"));
 
-//     function test_ShouldFailIfTokenIsTheSame() public {
-//         vm.expectRevert(abi.encodeWithSelector(BribeFactory_Tokens_Cannot_Be_The_Same.selector));
+        assertEq(Bribe(bribe).owner(), makeAddr("owner0"));
+        assertEq(Bribe(bribe0).owner(), makeAddr("owner0"));
+    }
 
-//         bribeFactory.createBribe(address(1), address(3), address(3), "_type");
-//     }
+    function testShouldRecoverERC20From() public {
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(this), address(0), address(0), "_type"
+        );
 
-//     ////////////////////////////////// ONLY OWNER or BRIBE ADMIN INTERACTIONS //////////////////////////////////
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//     function test_ShouldAddRewardTokenToBrideContract() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        OFTMockToken nativeOFT0 = new OFTMockToken(address(lzEndPointMockL1));
 
-//         bribeFactory.addRewardToBribe(makeAddr("rewardToken"), bribe);
-//         assertEq(IBribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
-//     }
+        nativeOFT.mint(bribe, 1 ether);
+        nativeOFT.mint(bribe0, 1 ether);
 
-//     function test_ShouldAddRewardTokensToBrideContract() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        nativeOFT0.mint(bribe, 1 ether);
 
-//         address[] memory addr = new address[](2);
-//         addr[0] = makeAddr("rewardToken");
+        address[][] memory tokens = new address[][](2);
+        tokens[0] = new address[](2);
+        tokens[1] = new address[](1);
 
-//         addr[1] = makeAddr("rewardToken1");
-//         bribeFactory.addRewardsToBribe(addr, bribe);
+        tokens[0][0] = address(nativeOFT);
+        tokens[0][1] = address(nativeOFT0);
 
-//         assertEq(IBribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
-//         assertEq(IBribe(bribe).rewardTokens(2), makeAddr("rewardToken1"));
-//     }
+        tokens[1][0] = address(nativeOFT);
 
-//     function test_ShouldAddRewardTokenToBrideContracts() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        uint256[][] memory amounts = new uint256[][](2);
+        amounts[0] = new uint256[](2);
+        amounts[1] = new uint256[](1);
 
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address[] memory bribes = new address[](2);
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
+        amounts[0][0] = 0.5 ether;
+        amounts[0][1] = 0.7 ether;
 
-//         bribeFactory.addRewardToBribes(makeAddr("rewardToken"), bribes);
+        amounts[1][0] = 0.6 ether;
 
-//         assertEq(IBribe(bribes[0]).rewardTokens(1), makeAddr("rewardToken"));
-//         assertEq(IBribe(bribes[1]).rewardTokens(1), makeAddr("rewardToken"));
-//     }
+        assertEq(nativeOFT.balanceOf(bribe), 1 ether);
+        assertEq(nativeOFT0.balanceOf(bribe), 1 ether);
+        assertEq(nativeOFT.balanceOf(bribe0), 1 ether);
 
-//     function test_ShouldAddRewardsTokenToBrideContracts() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        bribeFactory.recoverERC20From(bribes, tokens, amounts, false);
 
-//         address[] memory bribes = new address[](2);
+        assertEq(nativeOFT.balanceOf(bribe), 0.5 ether);
+        assertEq(nativeOFT0.balanceOf(bribe), 0.3 ether);
+        assertEq(nativeOFT.balanceOf(bribe0), 0.4 ether);
+    }
 
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
+    function testShouldrecoverERC20AndUpdateData() public {
+        OFTMockToken nativeOFT0 = new OFTMockToken(address(lzEndPointMockL1));
 
-//         address[][] memory rewards = new address[][](2);
-//         rewards[0] = new address[](2);
-//         rewards[1] = new address[](2);
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(nativeOFT0), address(0), "_type"
+        );
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(this), address(0), address(0), "_type"
+        );
 
-//         rewards[0][0] = makeAddr("rewardToken");
-//         rewards[0][1] = makeAddr("rewardToken0");
+        nativeOFT.mint(address(this), 2 ether);
+        nativeOFT0.mint(address(this), 1 ether);
 
-//         rewards[1][0] = makeAddr("rewardToken");
-//         rewards[1][1] = makeAddr("rewardToken0");
+        nativeOFT.approve(bribe, 1 ether);
+        nativeOFT0.approve(bribe, 1 ether);
 
-//         bribeFactory.addRewardsToBribes(rewards, bribes);
+        nativeOFT.approve(bribe0, 1 ether);
+        address[] memory bribes = new address[](2);
 
-//         assertEq(IBribe(bribe).rewardTokens(0), address(pearl));
-//         assertEq(IBribe(bribe0).rewardTokens(0), address(pearl));
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//         assertEq(IBribe(bribe).rewardTokens(1), makeAddr("rewardToken"));
-//         assertEq(IBribe(bribe0).rewardTokens(1), makeAddr("rewardToken"));
+        bribeFactory.setBribeMinter(bribes, address(minter));
+        Bribe(bribe).notifyRewardAmount(address(nativeOFT), 1 ether);
 
-//         assertEq(IBribe(bribe).rewardTokens(2), makeAddr("rewardToken0"));
-//         assertEq(IBribe(bribe0).rewardTokens(2), makeAddr("rewardToken0"));
-//     }
+        Bribe(bribe).notifyRewardAmount(address(nativeOFT0), 1 ether);
+        Bribe(bribe0).notifyRewardAmount(address(nativeOFT), 1 ether);
 
-//     function test_ShouldSetBribeVoter() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        address[][] memory tokens = new address[][](2);
+        tokens[0] = new address[](2);
+        tokens[1] = new address[](1);
 
-//         address[] memory bribes = new address[](2);
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
+        tokens[0][0] = address(nativeOFT);
+        tokens[0][1] = address(nativeOFT0);
+        tokens[1][0] = address(nativeOFT);
 
-//         assertEq(IBribe(bribe).voter(), address(voter));
-//         assertEq(IBribe(bribe0).voter(), address(voter));
+        uint256[][] memory amounts = new uint256[][](2);
+        amounts[0] = new uint256[](2);
 
-//         bribeFactory.setBribeVoter(bribes, makeAddr("voter"));
+        amounts[1] = new uint256[](1);
+        amounts[0][0] = 0.5 ether;
 
-//         assertEq(IBribe(bribe).voter(), makeAddr("voter"));
-//         assertEq(IBribe(bribe0).voter(), makeAddr("voter"));
-//     }
+        amounts[0][1] = 0.7 ether;
+        amounts[1][0] = 0.6 ether;
 
-//     function test_ShouldSetBribeMinter() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        assertEq(nativeOFT.balanceOf(bribe), 1 ether);
+        assertEq(nativeOFT0.balanceOf(bribe), 1 ether);
+        assertEq(nativeOFT.balanceOf(bribe0), 1 ether);
 
-//         address[] memory bribes = new address[](2);
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
+        bribeFactory.recoverERC20From(bribes, tokens, amounts, true);
 
-//         assertEq(IBribe(bribe).minter(), address(8));
-//         assertEq(IBribe(bribe0).minter(), address(8));
+        assertEq(nativeOFT.balanceOf(bribe), 0.5 ether);
+        assertEq(nativeOFT0.balanceOf(bribe), 0.3 ether);
+        assertEq(nativeOFT.balanceOf(bribe0), 0.4 ether);
+    }
 
-//         bribeFactory.setBribeMinter(bribes, makeAddr("minter"));
+    function testShouldFailIfTokenLengthIsNotEqualToAmountLength() public {
+        OFTMockToken nativeOFT0 = new OFTMockToken(address(lzEndPointMockL1));
 
-//         assertEq(IBribe(bribe).minter(), makeAddr("minter"));
-//         assertEq(IBribe(bribe0).minter(), makeAddr("minter"));
-//     }
+        address bribe = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(1), address(this), address(0), address(0), "_type"
+        );
+        address bribe0 = bribeFactory.createBribe(
+            lzMainChainId, lzMainChainId, address(2), address(this), address(0), address(0), "_type"
+        );
 
-//     function test_ShouldSetBribeOwner() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        address[] memory bribes = new address[](2);
+        bribes[0] = bribe;
+        bribes[1] = bribe0;
 
-//         address[] memory bribes = new address[](2);
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
+        nativeOFT.mint(bribe, 1 ether);
+        nativeOFT.mint(bribe0, 1 ether);
 
-//         assertEq(IBribe(bribe).owner(), makeAddr("owner"));
-//         assertEq(IBribe(bribe0).owner(), makeAddr("owner"));
+        nativeOFT0.mint(bribe0, 1 ether);
 
-//         bribeFactory.setBribeOwner(bribes, makeAddr("owner0"));
+        address[][] memory tokens = new address[][](2);
+        tokens[0] = new address[](1);
+        tokens[1] = new address[](2);
 
-//         assertEq(IBribe(bribe).owner(), makeAddr("owner0"));
-//         assertEq(IBribe(bribe0).owner(), makeAddr("owner0"));
-//     }
+        tokens[0][0] = address(nativeOFT);
 
-//     function test_ShouldRecoverERC20From() public {
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
+        tokens[1][0] = address(nativeOFT);
+        tokens[1][1] = address(nativeOFT0);
 
-//         address[] memory bribes = new address[](2);
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
+        uint256[][] memory amounts = new uint256[][](2);
+        amounts[0] = new uint256[](1);
+        amounts[1] = new uint256[](1);
 
-//         Pearl pearl0 = new Pearl(block.chainid, address(0));
-//         bytes memory init = abi.encodeCall(pearl0.initialize, (address(7)));
+        amounts[0][0] = 0.5 ether;
+        amounts[1][0] = 0.6 ether;
 
-//         ERC1967Proxy pearl0Proxy = new ERC1967Proxy(address(pearl0), init);
-//         pearl0 = Pearl(address(pearl0Proxy));
-
-//         pearl.mint(bribe, 1 ether);
-//         pearl.mint(bribe0, 1 ether);
-
-//         pearl0.mint(bribe, 1 ether);
-
-//         address[][] memory tokens = new address[][](2);
-//         tokens[0] = new address[](2);
-//         tokens[1] = new address[](1);
-
-//         tokens[0][0] = address(pearl);
-//         tokens[0][1] = address(pearl0);
-
-//         tokens[1][0] = address(pearl);
-
-//         uint256[][] memory amounts = new uint256[][](2);
-//         amounts[0] = new uint256[](2);
-//         amounts[1] = new uint256[](1);
-
-//         amounts[0][0] = 0.5 ether;
-//         amounts[0][1] = 0.7 ether;
-
-//         amounts[1][0] = 0.6 ether;
-
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe), 1 ether);
-//         assertEq(IPearl(address(pearl0)).balanceOf(bribe), 1 ether);
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe0), 1 ether);
-
-//         bribeFactory.recoverERC20From(bribes, tokens, amounts);
-
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe), 0.5 ether);
-//         assertEq(IPearl(address(pearl0)).balanceOf(bribe), 0.3 ether);
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe0), 0.4 ether);
-//     }
-
-//     function test_ShouldrecoverERC20AndUpdateData() public {
-//         Pearl pearl0 = new Pearl(block.chainid, address(0));
-//         bytes memory init = abi.encodeCall(pearl0.initialize, (address(7)));
-
-//         ERC1967Proxy pearl0Proxy = new ERC1967Proxy(address(pearl0), init);
-//         pearl0 = Pearl(address(pearl0Proxy));
-
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(pearl0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-
-//         pearl.mint(address(this), 2 ether);
-//         pearl0.mint(address(this), 1 ether);
-
-//         IPearl(address(pearl)).approve(bribe, 1 ether);
-//         IPearl(address(pearl0)).approve(bribe, 1 ether);
-
-//         IPearl(address(pearl)).approve(bribe0, 1 ether);
-//         address[] memory bribes = new address[](2);
-
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
-
-//         bribeFactory.setBribeMinter(bribes, address(minter));
-//         IBribe(bribe).notifyRewardAmount(address(pearl), 1 ether);
-
-//         IBribe(bribe).notifyRewardAmount(address(pearl0), 1 ether);
-//         IBribe(bribe0).notifyRewardAmount(address(pearl), 1 ether);
-
-//         address[][] memory tokens = new address[][](2);
-//         tokens[0] = new address[](2);
-//         tokens[1] = new address[](1);
-
-//         tokens[0][0] = address(pearl);
-//         tokens[0][1] = address(pearl0);
-//         tokens[1][0] = address(pearl);
-
-//         uint256[][] memory amounts = new uint256[][](2);
-//         amounts[0] = new uint256[](2);
-
-//         amounts[1] = new uint256[](1);
-//         amounts[0][0] = 0.5 ether;
-
-//         amounts[0][1] = 0.7 ether;
-//         amounts[1][0] = 0.6 ether;
-
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe), 1 ether);
-//         assertEq(IPearl(address(pearl0)).balanceOf(bribe), 1 ether);
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe0), 1 ether);
-
-//         bribeFactory.recoverERC20From(bribes, tokens, amounts);
-
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe), 0.5 ether);
-//         assertEq(IPearl(address(pearl0)).balanceOf(bribe), 0.3 ether);
-//         assertEq(IPearl(address(pearl)).balanceOf(bribe0), 0.4 ether);
-//     }
-
-//     function test_ShouldFailIfTokenLengthIsNotEqualToAmountLength() public {
-//         Pearl pearl0 = new Pearl(block.chainid, address(0));
-//         bytes memory init = abi.encodeCall(pearl0.initialize, (address(7)));
-
-//         ERC1967Proxy pearl0Proxy = new ERC1967Proxy(address(pearl0), init);
-//         pearl0 = Pearl(address(pearl0Proxy));
-
-//         address bribe = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-//         address bribe0 = bribeFactory.createBribe(makeAddr("owner"), address(0), address(0), "_type");
-
-//         address[] memory bribes = new address[](2);
-//         bribes[0] = bribe;
-//         bribes[1] = bribe0;
-
-//         pearl.mint(bribe, 1 ether);
-//         pearl.mint(bribe0, 1 ether);
-
-//         pearl0.mint(bribe0, 1 ether);
-
-//         address[][] memory tokens = new address[][](2);
-//         tokens[0] = new address[](1);
-//         tokens[1] = new address[](2);
-
-//         tokens[0][0] = address(pearl);
-
-//         tokens[1][0] = address(pearl);
-//         tokens[1][1] = address(pearl0);
-
-//         uint256[][] memory amounts = new uint256[][](2);
-//         amounts[0] = new uint256[](1);
-//         amounts[1] = new uint256[](1);
-
-//         amounts[0][0] = 0.5 ether;
-//         amounts[1][0] = 0.6 ether;
-
-//         vm.expectRevert(abi.encodeWithSelector(BribeFactory_Mismatch_Length.selector));
-//         bribeFactory.recoverERC20From(bribes, tokens, amounts);
-//     }
-// }
+        vm.expectRevert(abi.encodeWithSelector(BribeFactory.BribeFactory_Mismatch_Length.selector));
+        bribeFactory.recoverERC20From(bribes, tokens, amounts, false);
+    }
+}

@@ -9,4 +9,6 @@ contract TestERC20 is ERC20 {
     function mint(address addr, uint256 amt) external {
         _mint(addr, amt);
     }
+
+    function testExcluded() public {}
 }

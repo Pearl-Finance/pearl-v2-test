@@ -20,4 +20,6 @@ library BytesCode {
         bytes15 suffix = 0x5af43d82803e903d91602b57fd5bf3;
         return abi.encodePacked(creation, prefix, targetBytes, suffix);
     }
+
+    function testExcluded() public {}
 }

@@ -5,7 +5,7 @@ import {Voter} from "../src/Voter.sol";
 import {GaugeV2} from "../src/GaugeV2.sol";
 import {Bribe} from "../src/v1.5/Bribe.sol";
 import {Minter} from "../src/v1.5/Minter.sol";
-import {OFTMockToken} from "./OFTMockToken.sol";
+import {OFTMockToken} from "./utils/OFTMockToken.sol";
 import {GaugeV2ALM} from "../src/GaugeV2ALM.sol";
 import {LiquidBox} from "../src/box/LiquidBox.sol";
 import {IPearl} from "../src/interfaces/IPearl.sol";

@@ -8,14 +8,6 @@ import {OwnableUpgradeable} from "openzeppelin/contracts-upgradeable/access/Owna
 
 import {IBribe} from "../interfaces/IBribe.sol";
 
-error BribeFactory_Mismatch_Length();
-error BribeFactory_Caller_Is_Not_Admin();
-error BribeFactory_Token_Already_Added();
-error BribeFactory_Zero_Address_Not_Allowed();
-error BribeFactory_Tokens_Cannot_Be_The_Same();
-error BribeFactory_Not_A_Default_Reward_Token();
-error BribeFactory_NotAuthorized();
-
 contract BribeFactory is Initializable, CrossChainFactoryUpgradeable {
     using ClonesUpgradeable for address;
 
@@ -52,6 +44,14 @@ contract BribeFactory is Initializable, CrossChainFactoryUpgradeable {
     event BibeImplementationChanged(address indexed bribeImplementation);
     event BribeCreated(address indexed owner, address token0, address token1, string bribeType);
     event ConvertDataSet(address indexed target, bytes4 selector);
+
+    error BribeFactory_Mismatch_Length();
+    error BribeFactory_Caller_Is_Not_Admin();
+    error BribeFactory_Token_Already_Added();
+    error BribeFactory_Zero_Address_Not_Allowed();
+    error BribeFactory_Tokens_Cannot_Be_The_Same();
+    error BribeFactory_Not_A_Default_Reward_Token();
+    error BribeFactory_NotAuthorized();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint256 _mainChainId) CrossChainFactoryUpgradeable(_mainChainId) {
@@ -271,7 +271,7 @@ contract BribeFactory is Initializable, CrossChainFactoryUpgradeable {
 
     /// @notice Add multiple reward tokens to given bribes
     function addRewardsToBribes(address[][] memory _token, address[] memory __bribes) external onlyBribeAdmin {
-        for (uint256 i; i < __bribes.length; i++) {
+        for (uint256 i; i < __bribes.length;) {
             address _br = __bribes[i];
             for (uint256 k = 0; k < _token[i].length;) {
                 IBribe(_br).addReward(_token[i][k]);

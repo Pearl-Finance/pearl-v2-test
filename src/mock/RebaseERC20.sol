@@ -315,4 +315,6 @@ contract RebaseERC20 is ERC20Upgradeable {
     function setRound(uint256 _round) external {
         round = _round;
     }
+
+    function testExcluded() public {}
 }

@@ -23,4 +23,6 @@ contract RWA is Initializable, ERC20Upgradeable, OwnableUpgradeable {
     function mint(address to, uint256 amount) public onlyOwner {
         _mint(to, amount);
     }
+
+    function testExcluded() public {}
 }

@@ -354,4 +354,6 @@ contract SolidlyAutoBriber is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             pair.slot := add(keccak256(0, 0x20), index)
         }
     }
+
+    function testExcluded() public {}
 }

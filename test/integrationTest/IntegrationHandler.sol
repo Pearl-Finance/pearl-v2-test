@@ -7,7 +7,7 @@ import {CommonBase} from "forge-std/Base.sol";
 import {Bribe} from "../../src/v1.5/Bribe.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
-import {OFTMockToken} from ".././OFTMockToken.sol";
+import {OFTMockToken} from ".././utils/OFTMockToken.sol";
 import {TestERC20} from "../../src/mock/TestERC20.sol";
 import {console2 as console} from "forge-std/Test.sol";
 import {IMinter} from "../../src/interfaces/IMinter.sol";
@@ -557,4 +557,6 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
         return this.onERC721Received.selector;
     }
+
+    function testExcluded() public {}
 }

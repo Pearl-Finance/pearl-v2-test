@@ -38,4 +38,6 @@ contract OFTMockToken is OFTMock {
         amount = _creditTo(_srcChainId, to, amount);
         emit ReceiveFromChain(_srcChainId, to, amount);
     }
+
+    function testExcluded() public {}
 }

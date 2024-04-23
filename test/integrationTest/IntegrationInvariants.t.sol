@@ -9,7 +9,7 @@ import {Bribe} from "../../src/v1.5/Bribe.sol";
 import {WETH9} from "../../src/mock/WETH9.sol";
 import {Handler} from "./IntegrationHandler.sol";
 import {Minter} from "../../src/v1.5/Minter.sol";
-import {OFTMockToken} from ".././OFTMockToken.sol";
+import {OFTMockToken} from ".././utils/OFTMockToken.sol";
 import {GaugeV2ALM} from "../../src/GaugeV2ALM.sol";
 import {LiquidBox} from "../../src/box/LiquidBox.sol";
 import {IPearl} from "../../src/interfaces/IPearl.sol";
@@ -410,4 +410,6 @@ contract IntegrationTest is Test, Bytes {
     function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
         return this.onERC721Received.selector;
     }
+
+    function testExcluded() public {}
 }

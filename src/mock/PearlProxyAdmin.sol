@@ -7,4 +7,6 @@ contract PearlProxyAdmin is ProxyAdmin {
     constructor(address initialOwner) {
         _transferOwnership(initialOwner);
     }
+
+    function testExcluded() public {}
 }

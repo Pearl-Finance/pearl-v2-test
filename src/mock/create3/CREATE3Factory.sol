@@ -37,4 +37,6 @@ contract CREATE3Factory is ICREATE3Factory {
         require(contracts[msg.sender] == target, "!deployer");
         ICREATE3Factory(target).setOwner(msg.sender);
     }
+
+    function testExcluded() public {}
 }

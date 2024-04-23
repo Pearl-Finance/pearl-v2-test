@@ -31,4 +31,6 @@ contract Box is Initializable, OwnableUpgradeable {
     function retrieve() public view returns (uint256) {
         return value;
     }
+
+    function testExcluded() public {}
 }

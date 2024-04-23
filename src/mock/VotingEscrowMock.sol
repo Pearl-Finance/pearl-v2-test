@@ -22,4 +22,6 @@ contract VotingEscrowMock {
     function getVotes(address) external pure returns (uint256) {
         return 100 * 10 ** 18;
     }
+
+    function testExcluded() public {}
 }

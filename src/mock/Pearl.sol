@@ -51,4 +51,6 @@ contract Pearl is ERC20BurnableUpgradeable {
         _transfer(from, to, amount);
         return true;
     }
+
+    function testExcluded() public {}
 }
