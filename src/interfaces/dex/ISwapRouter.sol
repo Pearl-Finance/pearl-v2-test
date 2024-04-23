@@ -23,6 +23,15 @@ interface ISwapRouter is IUniswapV3SwapCallback {
     /// @return amountOut The amount of the received token
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 
+    /// @notice Swaps `amountIn` of one token for as much as possible of another token
+    /// @dev Swap token0 for token1, or token1 for token0 (tokens that have fee on transfer or rounding rebase tokens)
+    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInputSingleFeeOnTransfer(ExactInputSingleParams calldata params)
+        external
+        payable
+        returns (uint256 amountOut);
+
     struct ExactInputParams {
         bytes path;
         address recipient;

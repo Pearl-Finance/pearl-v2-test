@@ -9,4 +9,6 @@ contract CounterScript is Script {
     function run() public {
         vm.broadcast();
     }
+
+    function testExcluded() public {}
 }

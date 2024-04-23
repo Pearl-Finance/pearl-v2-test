@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 
 import "../../../lzApp/NonblockingLzApp.sol";
 import "./interfaces/IOFTCore.sol";
-import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import {ERC165} from "../../../../../../../../../openzeppelin-08/contracts/utils/introspection/ERC165.sol";
 
 abstract contract OFTCore is NonblockingLzApp, ERC165, IOFTCore {
     using BytesLib for bytes;
@@ -88,12 +88,7 @@ abstract contract OFTCore is NonblockingLzApp, ERC165, IOFTCore {
         emit SendToChain(_dstChainId, _from, _toAddress, amount);
     }
 
-    function _sendAck(
-        uint16 _srcChainId,
-        bytes memory,
-        uint64,
-        bytes memory _payload
-    ) internal virtual {
+    function _sendAck(uint16 _srcChainId, bytes memory, uint64, bytes memory _payload) internal virtual {
         (, bytes memory toAddressBytes, uint amount) = abi.decode(_payload, (uint16, bytes, uint));
 
         address to = toAddressBytes.toAddress(0);
@@ -102,12 +97,7 @@ abstract contract OFTCore is NonblockingLzApp, ERC165, IOFTCore {
         emit ReceiveFromChain(_srcChainId, to, amount);
     }
 
-    function _checkAdapterParams(
-        uint16 _dstChainId,
-        uint16 _pkType,
-        bytes memory _adapterParams,
-        uint _extraGas
-    ) internal virtual {
+    function _checkAdapterParams(uint16 _dstChainId, uint16 _pkType, bytes memory _adapterParams, uint _extraGas) internal virtual {
         if (useCustomAdapterParams) {
             _checkGasLimit(_dstChainId, _pkType, _adapterParams, _extraGas);
         } else {
@@ -115,16 +105,7 @@ abstract contract OFTCore is NonblockingLzApp, ERC165, IOFTCore {
         }
     }
 
-    function _debitFrom(
-        address _from,
-        uint16 _dstChainId,
-        bytes memory _toAddress,
-        uint _amount
-    ) internal virtual returns (uint);
+    function _debitFrom(address _from, uint16 _dstChainId, bytes memory _toAddress, uint _amount) internal virtual returns (uint);
 
-    function _creditTo(
-        uint16 _srcChainId,
-        address _toAddress,
-        uint _amount
-    ) internal virtual returns (uint);
+    function _creditTo(uint16 _srcChainId, address _toAddress, uint _amount) internal virtual returns (uint);
 }

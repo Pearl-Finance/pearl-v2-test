@@ -39,4 +39,6 @@ library LibAddressSet {
             func(s.addrs[i]);
         }
     }
+
+    function testExcluded() public {}
 }

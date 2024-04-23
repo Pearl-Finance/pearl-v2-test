@@ -389,7 +389,7 @@ contract VotingEscrow is
         }
         address owner = _requireOwned(tokenId);
         _checkAuthorized(owner, _msgSender(), tokenId);
-        tokenIds = new uint[](shares.length);
+        tokenIds = new uint256[](shares.length);
         tokenIds[0] = tokenId;
         uint256 totalShares;
         for (uint256 i = shares.length; i != 0;) {

@@ -126,9 +126,12 @@ library Tick {
         Tick.Info storage info = self[tick];
 
         uint128 liquidityGrossBefore = info.liquidityGross;
-        uint128 liquidityGrossAfter = liquidityDelta < 0
-            ? liquidityGrossBefore - uint128(-liquidityDelta)
-            : liquidityGrossBefore + uint128(liquidityDelta);
+        uint128 liquidityGrossAfter;
+        unchecked {
+            liquidityGrossAfter = liquidityDelta < 0
+                ? liquidityGrossBefore - uint128(-liquidityDelta)
+                : liquidityGrossBefore + uint128(liquidityDelta);
+        }
 
         if (liquidityGrossAfter > maxLiquidity) revert LO();
 

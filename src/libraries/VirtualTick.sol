@@ -48,7 +48,7 @@ library VirtualTick {
     /// @param tickCurrent The current tick
     /// @param rewardsGrowthGlobalX128 The all-time global fee growth, per unit of liquidity, in token0
     /// @return rewardsGrowthInsideX128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
-    function getrewardsGrowthInside(
+    function getRewardsGrowthInside(
         mapping(int24 => VirtualTick.Info) storage self,
         int24 tickLower,
         int24 tickUpper,
@@ -58,21 +58,6 @@ library VirtualTick {
         unchecked {
             Info storage lower = self[tickLower];
             Info storage upper = self[tickUpper];
-
-            // if (tickCurrent < tickUpper) {
-            //   if (tickCurrent >= tickLower) {
-            //     rewardsGrowthInsideX128 =
-            //       rewardsGrowthGlobalX128 -
-            //       lower.rewardsGrowthOutsideX128;
-            //   } else {
-            //     rewardsGrowthInsideX128 = lower.rewardsGrowthOutsideX128;
-            //   }
-            //   rewardsGrowthInsideX128 -= upper.rewardsGrowthOutsideX128;
-            // } else {
-            //   rewardsGrowthInsideX128 =
-            //     upper.rewardsGrowthOutsideX128 -
-            //     lower.rewardsGrowthOutsideX128;
-            // }
 
             // calculate fee growth below
             uint256 rewardsGrowthBelowX128;
@@ -114,9 +99,13 @@ library VirtualTick {
         VirtualTick.Info storage info = self[tick];
 
         uint128 liquidityGrossBefore = info.liquidityGross;
-        uint128 liquidityGrossAfter = liquidityDelta < 0
-            ? liquidityGrossBefore - uint128(-liquidityDelta)
-            : liquidityGrossBefore + uint128(liquidityDelta);
+
+        uint128 liquidityGrossAfter;
+        unchecked {
+            liquidityGrossAfter = liquidityDelta < 0
+                ? liquidityGrossBefore - uint128(-liquidityDelta)
+                : liquidityGrossBefore + uint128(liquidityDelta);
+        }
 
         if (liquidityGrossAfter > maxLiquidity) revert LO();
 

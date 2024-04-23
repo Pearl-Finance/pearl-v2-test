@@ -20,21 +20,20 @@ contract EpochController is OwnableUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address _minter, address _voter) external initializer {
+    function initialize(address _intialOwner, address _minter, address _voter) external initializer {
         __Ownable_init();
+        _transferOwnership(_intialOwner);
+
+        require(_minter != address(0) || _voter != address(0), "zero addr");
+
         minter = IMinter(_minter);
         voter = IVoter(_voter);
         batchSize = 10;
     }
 
     function checker() external view returns (bool canExec, bytes memory execPayload) {
-        canExec = _isDistributing;
-        if (!canExec) {
-            canExec = minter.check();
-            if (canExec) {
-                canExec = voter.length() > 0;
-            }
-        }
+        canExec = (_isDistributing || (minter.check() && voter.length() > 0));
+
         if (canExec) {
             execPayload = abi.encodeWithSelector(EpochController.distribute.selector);
         } else {
@@ -53,8 +52,12 @@ contract EpochController is OwnableUpgradeable {
             voter.distribute(from, to);
             bool done = to == numPools;
             _lastProcessed = done ? 0 : to;
-            _isDistributing = !done;
+            if (done) _isDistributing = false;
         }
+    }
+
+    function checkDistribution() external view returns (bool) {
+        return _isDistributing;
     }
 
     function setBatchSize(uint256 _batchSize) external onlyOwner {
@@ -63,12 +66,12 @@ contract EpochController is OwnableUpgradeable {
     }
 
     function setMinter(address _minter) external onlyOwner {
-        require(_minter != address(0));
+        require(_minter != address(0), "zeroAddr");
         minter = IMinter(_minter);
     }
 
     function setVoter(address _voter) external onlyOwner {
-        require(_voter != address(0));
+        require(_voter != address(0), "zeroAddr");
         voter = IVoter(_voter);
     }
 }

@@ -18,4 +18,6 @@ contract ERC20Mintable is ERC20Upgradeable {
     function mint(address account, uint256 amount) external {
         _mint(account, amount);
     }
+
+    function testExcluded() public {}
 }

@@ -10,3 +10,9 @@
 [submodule "lib/pearl-token"]
 	path = lib/pearl-token
 	url = https://github.com/Pearl-Finance/pearl-token
+[submodule "lib/solmate"]
+	path = lib/solmate
+	url = https://github.com/transmissions11/solmate
+[submodule "lib/xed"]
+	path = lib/xed
+	url = https://github.com/c-n-o-t-e/xed

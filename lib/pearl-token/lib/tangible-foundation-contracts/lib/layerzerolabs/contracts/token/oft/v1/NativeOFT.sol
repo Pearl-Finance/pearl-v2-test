@@ -2,18 +2,14 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "../../../../../../../../../openzeppelin-08/contracts/security/ReentrancyGuard.sol";
 import "./OFT.sol";
 
 contract NativeOFT is OFT, ReentrancyGuard {
     event Deposit(address indexed _dst, uint _amount);
     event Withdrawal(address indexed _src, uint _amount);
 
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        address _lzEndpoint
-    ) OFT(_name, _symbol, _lzEndpoint) {}
+    constructor(string memory _name, string memory _symbol, address _lzEndpoint) OFT(_name, _symbol, _lzEndpoint) {}
 
     function sendFrom(
         address _from,
@@ -61,12 +57,7 @@ contract NativeOFT is OFT, ReentrancyGuard {
         emit Withdrawal(msg.sender, _amount);
     }
 
-    function _debitFromNative(
-        address _from,
-        uint16,
-        bytes memory,
-        uint _amount
-    ) internal returns (uint messageFee) {
+    function _debitFromNative(address _from, uint16, bytes memory, uint _amount) internal returns (uint messageFee) {
         messageFee = msg.sender == _from ? _debitMsgSender(_amount) : _debitMsgFrom(_from, _amount);
     }
 
@@ -117,11 +108,7 @@ contract NativeOFT is OFT, ReentrancyGuard {
         return messageFee;
     }
 
-    function _creditTo(
-        uint16,
-        address _toAddress,
-        uint _amount
-    ) internal override(OFT) returns (uint) {
+    function _creditTo(uint16, address _toAddress, uint _amount) internal override(OFT) returns (uint) {
         _burn(address(this), _amount);
         (bool success, ) = _toAddress.call{value: _amount}("");
         require(success, "NativeOFT: failed to _creditTo");

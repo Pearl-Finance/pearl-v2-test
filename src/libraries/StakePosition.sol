@@ -35,15 +35,17 @@ library StakePosition {
     /// @param self The individual Stake to update
     /// @param liquidityDelta The change in pool liquidity as a result of the Stake update
     function update(StakePosition.Info storage self, int128 liquidityDelta) internal {
-        StakePosition.Info memory _self = self;
         uint128 liquidityNext;
+        uint128 selfLiquidity = self.liquidity;
         if (liquidityDelta == 0) {
-            if (_self.liquidity <= 0) revert NP(); // disallow pokes for 0 liquidity Stakes
-            liquidityNext = _self.liquidity;
+            if (selfLiquidity <= 0) revert NP(); // disallow pokes for 0 liquidity Stakes
+            liquidityNext = selfLiquidity;
         } else {
-            liquidityNext = liquidityDelta < 0
-                ? _self.liquidity - uint128(-liquidityDelta)
-                : _self.liquidity + uint128(liquidityDelta);
+            unchecked {
+                liquidityNext = liquidityDelta < 0
+                    ? selfLiquidity - uint128(-liquidityDelta)
+                    : selfLiquidity + uint128(liquidityDelta);
+            }
         }
 
         if (liquidityDelta != 0) self.liquidity = liquidityNext;

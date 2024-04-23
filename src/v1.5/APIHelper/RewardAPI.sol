@@ -10,6 +10,8 @@ import "../../interfaces/IVoter.sol";
 import "../../interfaces/IVotingEscrow.sol";
 
 contract RewardAPI is Initializable {
+    uint256 public constant PRECISION = 10 ** 18;
+
     IPearlV2Factory public pairFactory;
     IVoter public voter;
     address public underlyingToken;
@@ -17,13 +19,20 @@ contract RewardAPI is Initializable {
 
     mapping(address => bool) public notReward;
 
-    constructor() {}
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
-    function initialize(address _voter) public initializer {
-        owner = msg.sender;
+    function initialize(address _intialOwner, address _voter) public initializer {
+        require(_intialOwner != address(0) && _voter != address(0), "!zero address");
+
+        owner = _intialOwner;
         voter = IVoter(_voter);
         pairFactory = IPearlV2Factory(voter.factory());
-        underlyingToken = address(IVotingEscrow(voter._ve()).lockedToken());
+        underlyingToken = address(IVotingEscrow(voter.ve()).lockedToken());
+
+        require(address(pairFactory) != address(0) && underlyingToken != address(0), "!zero address");
     }
 
     struct Bribes {
@@ -40,7 +49,7 @@ contract RewardAPI is Initializable {
     function hasPendingRewards(address account, address[] calldata _pairs) external view returns (bool) {
         uint256 _numPairs = _pairs.length;
 
-        for (uint256 i = 0; i < _numPairs;) {
+        for (uint256 i; i < _numPairs;) {
             address _gauge = voter.gauges(_pairs[i]);
             if (_gauge != address(0)) {
                 // external
@@ -56,7 +65,7 @@ contract RewardAPI is Initializable {
                         address _token = IBribe(_bribe).rewardTokens(j);
                         if (!notReward[_token]) {
                             IBribe.Reward memory _reward = IBribe(_bribe).rewardData(_token, _epochStart);
-                            uint256 _amount = (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) / 1e18;
+                            uint256 _amount = (((_reward.rewardsPerEpoch * PRECISION) / _supply) * _balance) / PRECISION;
                             if (_amount != 0) return true;
                         }
                         unchecked {
@@ -77,7 +86,7 @@ contract RewardAPI is Initializable {
                         address _token = IBribe(_bribe).rewardTokens(j);
                         if (!notReward[_token]) {
                             IBribe.Reward memory _reward = IBribe(_bribe).rewardData(_token, _epochStart);
-                            uint256 _amount = (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) / 1e18;
+                            uint256 _amount = (((_reward.rewardsPerEpoch * PRECISION) / _supply) * _balance) / PRECISION;
                             if (_amount != 0) return true;
                         }
                         unchecked {
@@ -100,7 +109,6 @@ contract RewardAPI is Initializable {
         view
         returns (Rewards[] memory)
     {
-        uint256 i;
         uint256 len = pairs.length;
         address _gauge;
         address _bribe;
@@ -109,7 +117,7 @@ contract RewardAPI is Initializable {
         Rewards[] memory _rewards = new Rewards[](len);
 
         //external
-        for (i = 0; i < len; i++) {
+        for (uint256 i; i < len; i++) {
             _gauge = voter.gauges(pairs[i]);
 
             // get external
@@ -132,13 +140,12 @@ contract RewardAPI is Initializable {
         string[] memory _symbol = new string[](totTokens);
         uint256[] memory _decimals = new uint256[](totTokens);
         uint256 ts = IBribe(_bribe).getEpochStart();
-        uint256 i = 0;
         uint256 _supply = IBribe(_bribe).totalSupplyAt(ts);
         uint256 _balance = IBribe(_bribe).balanceOfAt(account, ts);
         address _token;
         IBribe.Reward memory _reward;
 
-        for (i; i < totTokens; i++) {
+        for (uint256 i; i < totTokens; i++) {
             _token = IBribe(_bribe).rewardTokens(i);
             _tokens[i] = _token;
             if (_balance == 0 || notReward[_token]) {
@@ -149,7 +156,7 @@ contract RewardAPI is Initializable {
                 _symbol[i] = IERC20MetadataUpgradeable(_token).symbol();
                 _decimals[i] = IERC20MetadataUpgradeable(_token).decimals();
                 _reward = IBribe(_bribe).rewardData(_token, ts);
-                _amounts[i] = (((_reward.rewardsPerEpoch * 1e18) / _supply) * _balance) / 1e18;
+                _amounts[i] = (((_reward.rewardsPerEpoch * PRECISION) / _supply) * _balance) / PRECISION;
             }
         }
 
@@ -184,11 +191,10 @@ contract RewardAPI is Initializable {
         string[] memory _symbol = new string[](totTokens);
         uint256[] memory _decimals = new uint256[](totTokens);
         uint256 ts = IBribe(_bribe).getNextEpochStart();
-        uint256 i = 0;
         address _token;
         IBribe.Reward memory _reward;
 
-        for (i; i < totTokens; i++) {
+        for (uint256 i; i < totTokens; i++) {
             _token = IBribe(_bribe).rewardTokens(i);
             _tokens[i] = _token;
             if (notReward[_token]) {
@@ -232,6 +238,6 @@ contract RewardAPI is Initializable {
         voter = IVoter(_voter);
         // update variable depending on voter
         pairFactory = IPearlV2Factory(voter.factory());
-        underlyingToken = address(IVotingEscrow(voter._ve()).lockedToken());
+        underlyingToken = address(IVotingEscrow(voter.ve()).lockedToken());
     }
 }

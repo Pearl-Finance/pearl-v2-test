@@ -85,6 +85,8 @@ contract RebaseERC20 is ERC20Upgradeable {
 
     uint256 private _totalSupply;
     uint256 private _gonsPerFragment;
+    uint256 public round;
+
     mapping(address => uint256) private _gonBalances;
 
     // This is denominated in Fragments, because the gons-fragments conversion might change before
@@ -244,7 +246,7 @@ contract RebaseERC20 is ERC20Upgradeable {
 
         uint256 gonValue = value.mul(_gonsPerFragment);
         _gonBalances[from] = _gonBalances[from].sub(gonValue);
-        _gonBalances[to] = _gonBalances[to].add(gonValue);
+        _gonBalances[to] = _gonBalances[to].add(gonValue).sub(round); // To simulate rounding rebase by default round = 0
         emit Transfer(from, to, value);
 
         return true;
@@ -306,4 +308,13 @@ contract RebaseERC20 is ERC20Upgradeable {
      * @dev Dummy fucntion for testing purposes
      */
     function disableRebase(address, bool) external {}
+
+    /**
+     * @dev Dummy fucntion for testing purposes
+     */
+    function setRound(uint256 _round) external {
+        round = _round;
+    }
+
+    function testExcluded() public {}
 }

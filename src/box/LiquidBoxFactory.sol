@@ -42,42 +42,70 @@ contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
      *
      */
 
-    event BoxCreated(address token0, address token1, uint24 fee, address box, uint256);
+    event BoxCreated(address token0, address token1, uint24 fee, address indexed box, uint256 boxLength);
+
+    event ManagerChanged(address indexed manager);
+    event BoxManagerChanged(address indexed boxManager);
+    event SetBoxImplementation(address indexed boxImplementation);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _pealrV2Factory, address _boxImplementation) public initializer {
+    function initialize(address _intialOwner, address _pearlV2Factory, address _boxImplementation) public initializer {
+        require(
+            _intialOwner != address(0) && _pearlV2Factory != address(0) && _boxImplementation != address(0),
+            "!zero address"
+        );
+
         __Ownable_init();
-        manager = msg.sender;
+        _transferOwnership(_intialOwner);
+
+        manager = _intialOwner;
         boxImplementation = _boxImplementation;
-        pearlV2Factory = IPearlV2Factory(_pealrV2Factory);
+        pearlV2Factory = IPearlV2Factory(_pearlV2Factory);
     }
 
-    function createLiquidBox(
-        address tokenA,
-        address tokenB,
-        address owner,
-        uint24 fee,
-        string memory name,
-        string memory symbol
-    ) external returns (address box) {
-        require(msg.sender == manager, "manager");
+    /**
+     * @dev Throws if called by any account other than the manager.
+     */
+    modifier onlyAllowed() {
+        _checkRole();
+        _;
+    }
+
+    /**
+     * @dev Throws if the sender is not the manager.
+     */
+    function _checkRole() internal view virtual {
+        require(owner() == _msgSender() || manager == _msgSender(), "caller doesn't have permission");
+    }
+
+    function createLiquidBox(address tokenA, address tokenB, uint24 fee, string memory name, string memory symbol)
+        external
+        onlyAllowed
+        returns (address box)
+    {
         require(tokenA != tokenB, "token");
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        require(token0 != address(0));
+        require(token0 != address(0), "zero address");
 
         address pool = pearlV2Factory.getPool(token0, token1, fee);
         require(pool != address(0), "pool");
-        require(getBox[token0][token1][fee] == address(0));
+        require(getBox[token0][token1][fee] == address(0), "box exists");
 
         int24 tickSpacing = pearlV2Factory.feeAmountTickSpacing(fee);
 
         bytes32 salt = keccak256(abi.encodePacked(token0, token1, fee, tickSpacing));
         box = boxImplementation.cloneDeterministic(salt);
-        ILiquidBox(box).initialize(pool, owner, address(this), name, symbol);
+        ILiquidBox(box).initialize(
+            pool,
+            address(this), // owner
+            address(this),
+            name,
+            symbol
+        );
 
         getBox[token0][token1][fee] = box;
         getBox[token1][token0][fee] = box;
@@ -86,14 +114,45 @@ contract LiquidBoxFactory is ILiquidBoxFactory, OwnableUpgradeable {
     }
 
     function setManager(address _manager) external onlyOwner {
+        require(_manager != address(0), "zero addr");
         manager = _manager;
+        emit ManagerChanged(_manager);
     }
 
     function setBoxManager(address _boxManager) external onlyOwner {
+        require(_boxManager != address(0), "zero addr");
         boxManager = _boxManager;
+        emit BoxManagerChanged(_boxManager);
     }
 
     function setBoxImplementation(address _boxImplementation) external onlyOwner {
+        require(_boxImplementation != address(0), "zero addr");
         boxImplementation = _boxImplementation;
+        emit SetBoxImplementation(_boxImplementation);
+    }
+
+    /// @notice set owner of the contract
+    function setOwner(address box, address _owner) external onlyOwner {
+        require(_owner != address(0), "zero addr");
+        ILiquidBox(box).setOwner(_owner);
+    }
+
+    /// @notice set management fee
+    function setFee(address box, uint24 newFee) external onlyOwner {
+        ILiquidBox(box).setFee(newFee);
+    }
+
+    function setMaxTotalSupply(address box, uint256 _maxTotalSupply) external onlyAllowed {
+        ILiquidBox(box).setMaxTotalSupply(_maxTotalSupply);
+    }
+
+    /// @notice Toggle Direct Deposit
+    function toggleDirectDeposit(address box) external onlyAllowed {
+        ILiquidBox(box).toggleDirectDeposit();
+    }
+
+    /// @notice set manager of the contract
+    function setGauge(address box, address gauge) external onlyAllowed {
+        ILiquidBox(box).setGauge(gauge);
     }
 }

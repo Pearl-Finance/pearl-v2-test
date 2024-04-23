@@ -10,102 +10,11 @@ import "../../interfaces/dex/IPearlV2Factory.sol";
 import "../../interfaces/IVoter.sol";
 import "../../interfaces/IVotingEscrow.sol";
 import "../../interfaces/IRewardsDistributor.sol";
-
-interface IVesting {
-    function getSchedule(uint256 tokenId)
-        external
-        view
-        returns (IVotingEscrow.VestingSchedule memory vestingSchedule);
-}
-
-interface IPearlV2PoolAPI {
-    enum Version {
-        V2,
-        V3,
-        V4
-    }
-
-    struct positionInfo {
-        uint256 tokenId; // nft token id
-        int24 tickLower;
-        int24 tickUpper;
-        uint128 liquidity;
-        uint256 amount0;
-        uint256 amount1;
-        uint256 fee_amount0; // token0 feeAmount for this tokenid
-        uint256 fee_amount1; // token1 feeAmount for this tokenid
-        uint256 earned;
-        bool isStaked;
-    }
-
-    struct pairInfo {
-        // pair info
-        Version version;
-        address pair_address; // pair contract address
-        address box_address; // box contract address
-        address box_manager_address; // box manager contract address
-        string name; // pair name
-        string symbol; // pair symbol
-        uint256 decimals; //v1Pools LP token decimals
-        address token0; // pair 1st token address
-        address token1; // pair 2nd token address
-        uint24 fee; // fee of the pair
-        string token0_symbol; // pair 1st token symbol
-        uint256 token0_decimals; // pair 1st token decimals
-        string token1_symbol; // pair 2nd token symbol
-        uint256 token1_decimals; // pair 2nd token decimals
-        uint256 total_supply; // total supply of v1 pools
-        uint256 total_supply0; // token0 available in pool
-        uint256 total_supply1; // token1 available in pool
-        uint128 total_liquidity; //liquidity of the pool
-        uint160 sqrtPriceX96;
-        int24 tick;
-        // pairs gauge
-        address gauge; // pair gauge address
-        address gauge_alm; // pair gauge ALM address
-        uint256 gauge_alm_total_supply; // pair staked tokens (less/eq than/to pair total supply)
-        address gauge_fee; // pair fees contract address
-        uint256 gauge_fee_claimable0; // fees claimable in token1
-        uint256 gauge_fee_claimable1; // fees claimable in token1
-        address bribe; // pair bribes contract address
-        uint256 emissions; // pair emissions (per second) for active liquidity
-        address emissions_token; // pair emissions token address
-        uint256 emissions_token_decimals; // pair emissions token decimals
-        //alm
-        int24 alm_lower; //lower limit of the alm
-        int24 alm_upper; //upper limit of the alm
-        uint256 alm_total_supply0; // token0 available in alm
-        uint256 alm_total_supply1; // token1 available in alm
-        uint128 alm_total_liquidity; //liquidity of the alm
-        // User deposit
-        uint256 account_lp_balance; //v1Pools account LP tokens balance
-        uint256 account_lp_amount0; // total amount of token0 available in pool including alm for account
-        uint256 account_lp_amount1; //  total amount of token1 available in pool including alm for account
-        uint256 account_lp_alm; // total amount of token0 available in pool including alm for account
-        uint256 account_lp_alm_staked; // total amount of token0 available in pool including alm for account
-        uint256 account_lp_alm_amount0; // amount of token0 available in alm for account
-        uint256 account_lp_alm_amount1; //  amount of token1 available in alm for account
-        uint256 account_lp_alm_staked_amount0; // amount of token1 for staked ALM LP token
-        uint256 account_lp_alm_staked_amount1; // amount of token0 for stakedALM  LP token
-        uint256 account_lp_alm_earned; // amount of rewards earned on stake ALM LP token
-        uint256 account_lp_alm_claimable0; // total amount of token0 available in pool including alm for account
-        uint256 account_lp_alm_claimable1; // total amount of token0 available in pool including alm for account
-        uint256 account_token0_balance; // account 1st token balance
-        uint256 account_token1_balance; // account 2nd token balance
-        uint256 account_gauge_balance; // account pair staked in gauge balance
-        positionInfo[] account_positions; //nft position information for account
-    }
-
-    function getPair(address _pair, address _account, uint8 _version)
-        external
-        view
-        returns (pairInfo memory _pairInfo);
-
-    function pair_factory() external view returns (address);
-}
+import "./interfaces/IPearlV2PoolAPI.sol";
+import "./interfaces/IVesting.sol";
 
 contract veNFTAPI is Initializable {
-    struct pairVotes {
+    struct PairVotes {
         address pair;
         uint256 weight;
     }
@@ -116,7 +25,7 @@ contract veNFTAPI is Initializable {
         uint256 voting_amount;
         bool voted;
         veNFT[] venft;
-        pairVotes[] votes;
+        PairVotes[] votes;
     }
 
     struct veNFT {
@@ -140,45 +49,61 @@ contract veNFTAPI is Initializable {
         string symbol;
     }
 
-    uint256 public constant MAX_RESULTS = 1000;
-    uint256 public constant MAX_PAIRS = 30;
-
-    IVoter public voter;
-    address public underlyingToken;
-
-    mapping(address => bool) public notReward;
-
-    IVotingEscrow public ve;
-    IRewardsDistributor public rewardDistributor;
-
-    address public pairAPI;
-    IPearlV2Factory public pairFactory;
-
-    address public owner;
-
-    event Owner(address oldOwner, address newOwner);
-
     struct AllPairRewards {
         Reward[] rewards;
     }
 
-    constructor() {}
+    uint256 public constant MAX_RESULTS = 1_000;
+    uint256 public constant MAX_PAIRS = 30;
 
-    function initialize(address _voter, address _rewarddistro, address _pairApi, address _pairFactory)
-        public
-        initializer
-    {
-        owner = msg.sender;
+    address public owner;
 
+    address public pairAPI;
+    address public underlyingToken;
+
+    IVoter public voter;
+    IVotingEscrow public ve;
+    IRewardsDistributor public rewardDistributor;
+    IPearlV2Factory public pairFactory;
+
+    mapping(address => bool) public notReward;
+
+    event OwnerChanged(address indexed oldOwner, address newOwner);
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address _intialOwner,
+        address _voter,
+        address _rewarddistro,
+        address _pairApi,
+        address _pairFactory
+    ) public initializer {
+        require(
+            _intialOwner != address(0) && _voter != address(0) && _rewarddistro != address(0) && _pairApi != address(0)
+                && _pairFactory != address(0),
+            "zeroAddr"
+        );
+        owner = _intialOwner;
+        emit OwnerChanged(msg.sender, _intialOwner);
         pairAPI = _pairApi;
         voter = IVoter(_voter);
         rewardDistributor = IRewardsDistributor(_rewarddistro);
-
-        require(address(rewardDistributor.ve()) == voter._ve(), "ve!=ve");
-
+        require(address(rewardDistributor.ve()) == voter.ve(), "ve!=ve");
         ve = rewardDistributor.ve();
         underlyingToken = address(ve.lockedToken());
         pairFactory = IPearlV2Factory(_pairFactory);
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        _checkOwner();
+        _;
     }
 
     function getNFTFromId(uint256 id) external view returns (veNFT memory) {
@@ -202,7 +127,7 @@ contract veNFTAPI is Initializable {
         }
 
         uint256 _totalPoolVotes = voter.poolVoteLength(_account);
-        pairVotes[] memory votes = new pairVotes[](_totalPoolVotes);
+        PairVotes[] memory votes = new PairVotes[](_totalPoolVotes);
 
         uint256 _poolWeight;
         address _votedPair;
@@ -230,6 +155,13 @@ contract veNFTAPI is Initializable {
         return ve.getVotes(_account);
     }
 
+    /**
+     * @dev Throws if the sender is not the owner.
+     */
+    function _checkOwner() internal view virtual {
+        require(owner == msg.sender, "!owner");
+    }
+
     function _getNFTFromId(uint256 tokenId, address _account) internal view returns (veNFT memory venft) {
         if (_account == address(0)) {
             return venft;
@@ -238,7 +170,7 @@ contract veNFTAPI is Initializable {
         venft.id = tokenId;
         venft.account = _account;
         venft.amount = uint128(ve.getLockedAmount(tokenId));
-        venft.rebase_amount = rewardDistributor.claimable(tokenId);
+        // venft.rebase_amount = rewardDistributor.claimable(tokenId);
         venft.vote_ts = voter.lastVoted(_account);
         venft.token = address(ve.lockedToken());
 
@@ -259,7 +191,7 @@ contract veNFTAPI is Initializable {
         uint256 _totalPairs = pairFactory.allPairsLength();
         address _account = ve.ownerOf(_tokenId);
 
-        for (uint256 i = 0; i < _totalPairs;) {
+        for (uint256 i; i < _totalPairs;) {
             address _pair = pairFactory.allPairs(i);
             address _gauge = voter.gauges(_pair);
 
@@ -307,10 +239,9 @@ contract veNFTAPI is Initializable {
         rewards = new AllPairRewards[](MAX_PAIRS);
 
         uint256 totalPairs = pairFactory.allPairsLength();
-
-        uint256 i = _offset;
         address _pair;
-        for (i; i < _offset + _amount; i++) {
+
+        for (uint256 i = _offset; i < _offset + _amount; i++) {
             if (i >= totalPairs) {
                 break;
             }
@@ -384,10 +315,9 @@ contract veNFTAPI is Initializable {
             }
         }
 
-        uint256 k = 0;
         address _token;
 
-        for (k; k < totBribeTokens; k++) {
+        for (uint256 k; k < totBribeTokens; k++) {
             _token = IBribe(wrappedBribe).rewardTokens(k);
             bribeAmount = IBribe(wrappedBribe).earned(_account, _token);
             if (!notReward[_token]) {
@@ -407,41 +337,33 @@ contract veNFTAPI is Initializable {
         return _reward;
     }
 
-    function setOwner(address _owner) external {
-        require(msg.sender == owner, "not owner");
+    function setOwner(address _owner) external onlyOwner {
         require(_owner != address(0), "zeroAddr");
         owner = _owner;
-        emit Owner(msg.sender, _owner);
+        emit OwnerChanged(msg.sender, _owner);
     }
 
-    function setVoter(address _voter) external {
-        require(msg.sender == owner);
-
+    function setVoter(address _voter) external onlyOwner {
         voter = IVoter(_voter);
     }
 
-    function setRewardDistro(address _rewarddistro) external {
-        require(msg.sender == owner);
-
+    function setRewardDistro(address _rewarddistro) external onlyOwner {
         rewardDistributor = IRewardsDistributor(_rewarddistro);
-        require(address(rewardDistributor.ve()) == voter._ve(), "ve!=ve");
+        require(address(rewardDistributor.ve()) == voter.ve(), "ve!=ve");
 
         ve = rewardDistributor.ve();
         underlyingToken = address(IVotingEscrow(ve).lockedToken());
     }
 
-    function setPairAPI(address _pairApi) external {
-        require(msg.sender == owner);
+    function setPairAPI(address _pairApi) external onlyOwner {
         pairAPI = _pairApi;
     }
 
-    function setPairFactory(address _pairFactory) external {
-        require(msg.sender == owner);
+    function setPairFactory(address _pairFactory) external onlyOwner {
         pairFactory = IPearlV2Factory(_pairFactory);
     }
 
-    function setVotingEscrow(address _votingEscrow) external {
-        require(msg.sender == owner);
+    function setVotingEscrow(address _votingEscrow) external onlyOwner {
         ve = IVotingEscrow(_votingEscrow);
     }
 }

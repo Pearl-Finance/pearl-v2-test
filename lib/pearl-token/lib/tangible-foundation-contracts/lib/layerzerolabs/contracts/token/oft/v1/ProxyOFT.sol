@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "./OFTCore.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../../../../../../../../../openzeppelin-08/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract ProxyOFT is OFTCore {
     using SafeERC20 for IERC20;
@@ -24,23 +24,14 @@ contract ProxyOFT is OFTCore {
         return address(innerToken);
     }
 
-    function _debitFrom(
-        address _from,
-        uint16,
-        bytes memory,
-        uint _amount
-    ) internal virtual override returns (uint) {
+    function _debitFrom(address _from, uint16, bytes memory, uint _amount) internal virtual override returns (uint) {
         require(_from == _msgSender(), "ProxyOFT: owner is not send caller");
         uint before = innerToken.balanceOf(address(this));
         innerToken.safeTransferFrom(_from, address(this), _amount);
         return innerToken.balanceOf(address(this)) - before;
     }
 
-    function _creditTo(
-        uint16,
-        address _toAddress,
-        uint _amount
-    ) internal virtual override returns (uint) {
+    function _creditTo(uint16, address _toAddress, uint _amount) internal virtual override returns (uint) {
         uint before = innerToken.balanceOf(_toAddress);
         innerToken.safeTransfer(_toAddress, _amount);
         return innerToken.balanceOf(_toAddress) - before;

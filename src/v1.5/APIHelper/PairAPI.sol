@@ -23,13 +23,12 @@ import "../../interfaces/box/ILiquidBoxManager.sol";
 contract PairAPI is Initializable {
     enum Version {
         V2,
-        V3,
-        V4
+        V3
     }
 
     Version public version;
 
-    struct positionInfo {
+    struct PositionInfo {
         uint256 tokenId; // nft token id
         int24 tickLower;
         int24 tickUpper;
@@ -42,7 +41,7 @@ contract PairAPI is Initializable {
         bool isStaked;
     }
 
-    struct pairInfo {
+    struct PairInfo {
         // pair info
         Version version;
         address pair_address; // pair contract address
@@ -97,27 +96,27 @@ contract PairAPI is Initializable {
         uint256 account_token0_balance; // account 1st token balance
         uint256 account_token1_balance; // account 2nd token balance
         uint256 account_gauge_balance; // account pair staked in gauge balance
-        positionInfo[] account_positions; //nft position information for account
+        PositionInfo[] account_positions; //nft position information for account
     }
 
-    struct feeInfo {
+    struct FeeInfo {
         uint256 tokenId; // nft token id
         uint256 token0; // token0 feeAmount for this tokenid
         uint256 token1; // token1 feeAmount for this tokenid
     }
 
-    struct tokenBribe {
+    struct TokenBribe {
         address token;
         uint8 decimals;
         uint256 amount;
         string symbol;
     }
 
-    struct pairBribeEpoch {
+    struct PairBribeEpoch {
         uint256 epochTimestamp;
         uint256 totalVotes;
         address pair;
-        tokenBribe[] bribes;
+        TokenBribe[] bribes;
     }
 
     struct NftParams {
@@ -132,8 +131,7 @@ contract PairAPI is Initializable {
         uint128 liquidity;
     }
 
-    uint256 public constant MAX_PAIRS = 1000;
-    uint256 public constant MAX_EPOCHS = 200;
+    uint256 public constant MAX_EPOCHS = 2_00;
     uint256 public constant MAX_REWARDS = 16;
     uint256 public constant WEEK = 7 * 24 * 60 * 60;
 
@@ -147,33 +145,39 @@ contract PairAPI is Initializable {
     address public underlyingToken;
     address public owner;
 
-    event Owner(address oldOwner, address newOwner);
-    event Voter(address oldVoter, address newVoter);
+    event Owner(address indexed oldOwner, address newOwner);
+    event Voter(address indexed oldVoter, address newVoter);
 
-    function initialize(address _voter, address _posManager, address _liquidBoxManager, address _factoryV1)
-        public
-        initializer
-    {
-        owner = msg.sender;
+    function initialize(
+        address _intialOwner,
+        address _voter,
+        address _posManager,
+        address _liquidBoxManager,
+        address _factoryV1,
+        address _underlyingToken
+    ) public initializer {
+        require(
+            _intialOwner != address(0) && _posManager != address(0) && _factoryV1 != address(0)
+                && _underlyingToken != address(0) && _voter != address(0) && _liquidBoxManager != address(0),
+            "!zero address"
+        );
+
+        owner = _intialOwner;
 
         voter = IVoter(_voter);
         positionManager = INonfungiblePositionManager(_posManager);
         lboxManager = ILiquidBoxManager(_liquidBoxManager);
         pairFactory = IPearlV2Factory(voter.factory());
         pairFactoryV1 = IPearlV1Factory(_factoryV1);
-        underlyingToken = address(IVotingEscrow(voter._ve()).lockedToken());
+        underlyingToken = _underlyingToken;
     }
 
     function getAllPair(address _user, uint256 _amounts, uint256 _offset)
         external
         view
-        returns (pairInfo[] memory Pairs)
+        returns (PairInfo[] memory Pairs)
     {
-        require(_amounts <= MAX_PAIRS, "too many pair");
-
-        Pairs = new pairInfo[](_amounts);
-
-        uint256 i = _offset;
+        Pairs = new PairInfo[](_amounts);
         uint256 totV2Pairs = pairFactoryV1.allPairsLength();
         uint256 totV3Pairs = pairFactory.allPairsLength();
 
@@ -181,7 +185,7 @@ contract PairAPI is Initializable {
 
         uint256 totPairs = totV2Pairs + totV3Pairs;
         uint256 j;
-        for (i; i < _offset + _amounts; i++) {
+        for (uint256 i = _offset; i < _offset + _amounts; i++) {
             // if totalPairs is reached, break.
             if (i == totPairs) {
                 break;
@@ -201,7 +205,7 @@ contract PairAPI is Initializable {
     function getPair(address _pair, address _account, uint8 _version)
         external
         view
-        returns (pairInfo memory _pairInfo)
+        returns (PairInfo memory _pairInfo)
     {
         if (_version == uint8(Version.V2)) {
             return _pairAddressToInfoV2(_pair, _account);
@@ -209,17 +213,28 @@ contract PairAPI is Initializable {
         return _pairAddressToInfoV3(_pair, _account);
     }
 
-    function _pairAddressToInfoV2(address _pair, address _account) internal view returns (pairInfo memory _pairInfo) {
+    function _pairAddressToInfoV2(address _pair, address _account) internal view returns (PairInfo memory _pairInfo) {
         IPearlV1Pool ipair = IPearlV1Pool(_pair);
         address token_0;
         address token_1;
         uint256 r0;
         uint256 r1;
 
-        _pairInfo.version = Version.V2;
-
         token_0 = ipair.token0();
         token_1 = ipair.token1();
+
+        try IERC20MetadataUpgradeable(token_0).symbol() {}
+        catch {
+            return _pairInfo;
+        }
+
+        try IERC20MetadataUpgradeable(token_1).symbol() {}
+        catch {
+            return _pairInfo;
+        }
+
+        _pairInfo.version = Version.V2;
+
         (r0, r1,) = ipair.getReserves();
 
         _pairInfo.pair_address = _pair;
@@ -259,7 +274,7 @@ contract PairAPI is Initializable {
         }
     }
 
-    function _pairAddressToInfoV3(address _pair, address _account) internal view returns (pairInfo memory _pairInfo) {
+    function _pairAddressToInfoV3(address _pair, address _account) internal view returns (PairInfo memory _pairInfo) {
         IPearlV2Pool ipair = IPearlV2Pool(_pair);
         address token_0;
         address token_1;
@@ -270,6 +285,16 @@ contract PairAPI is Initializable {
 
         token_0 = ipair.token0();
         token_1 = ipair.token1();
+
+        try IERC20MetadataUpgradeable(token_0).symbol() {}
+        catch {
+            return _pairInfo;
+        }
+
+        try IERC20MetadataUpgradeable(token_1).symbol() {}
+        catch {
+            return _pairInfo;
+        }
 
         r0 = ipair.reserve0();
         r1 = ipair.reserve1();
@@ -352,12 +377,12 @@ contract PairAPI is Initializable {
     }
 
     function _positionInfo(
-        pairInfo memory _pairInfo,
+        PairInfo memory _pairInfo,
         address _account,
         address _pair,
         IPearlV2Pool ipair,
         IGaugeV2 _gauge
-    ) internal view returns (pairInfo memory) {
+    ) internal view returns (PairInfo memory) {
         NftParams memory nftParams;
         nftParams.pairToken0 = ipair.token0();
         nftParams.pairToken1 = ipair.token1();
@@ -405,7 +430,7 @@ contract PairAPI is Initializable {
         if (totalNFT > 0) {
             uint128 j = 0;
             uint128 i = 0;
-            _pairInfo.account_positions = new positionInfo[](totalNFT);
+            _pairInfo.account_positions = new PositionInfo[](totalNFT);
             {
                 for (i = 0; i < totalNftInUserAccount; i++) {
                     uint256 tokenId = IERC721Enumerable(address(positionManager)).tokenOfOwnerByIndex(_account, i);
@@ -443,7 +468,7 @@ contract PairAPI is Initializable {
         return _pairInfo;
     }
 
-    function _positions(uint256 tokenId, uint160 sqrtPriceX96) internal view returns (positionInfo memory _pos) {
+    function _positions(uint256 tokenId, uint160 sqrtPriceX96) internal view returns (PositionInfo memory _pos) {
         _pos.tokenId = tokenId;
         (,,,,, _pos.tickLower, _pos.tickUpper, _pos.liquidity,,,,) = positionManager.positions(tokenId);
         (_pos.amount0, _pos.amount1) = PositionValue.principal(positionManager, tokenId, sqrtPriceX96);
@@ -454,11 +479,11 @@ contract PairAPI is Initializable {
     function getPairBribe(uint256 _amounts, uint256 _offset, address _pair)
         external
         view
-        returns (pairBribeEpoch[] memory _pairEpoch)
+        returns (PairBribeEpoch[] memory _pairEpoch)
     {
         require(_amounts <= MAX_EPOCHS, "too many epochs");
 
-        _pairEpoch = new pairBribeEpoch[](_amounts);
+        _pairEpoch = new PairBribeEpoch[](_amounts);
 
         address _gauge = voter.gauges(_pair);
 
@@ -479,9 +504,8 @@ contract PairAPI is Initializable {
         }
 
         uint256 _supply;
-        uint256 i = _offset;
 
-        for (i; i < _offset + _amounts; i++) {
+        for (uint256 i = _offset; i < _offset + _amounts; i++) {
             _supply = bribe.totalSupplyAt(_epochStartTimestamp);
             _pairEpoch[i - _offset].epochTimestamp = _epochStartTimestamp;
             _pairEpoch[i - _offset].pair = _pair;
@@ -492,11 +516,11 @@ contract PairAPI is Initializable {
         }
     }
 
-    function _bribe(uint256 _ts, address _br) internal view returns (tokenBribe[] memory _tb) {
+    function _bribe(uint256 _ts, address _br) internal view returns (TokenBribe[] memory _tb) {
         IBribe _wb = IBribe(_br);
         uint256 tokenLen = _wb.rewardsListLength();
 
-        _tb = new tokenBribe[](tokenLen);
+        _tb = new TokenBribe[](tokenLen);
 
         uint256 k;
         uint256 _rewPerEpoch;
@@ -534,7 +558,7 @@ contract PairAPI is Initializable {
 
         // update variable depending on voter
         pairFactory = IPearlV2Factory(voter.factory());
-        underlyingToken = address(IVotingEscrow(voter._ve()).lockedToken());
+        underlyingToken = address(IVotingEscrow(voter.ve()).lockedToken());
 
         emit Voter(_oldVoter, _voter);
     }
@@ -566,7 +590,7 @@ contract PairAPI is Initializable {
         uint256 len = tokenIds.length;
         (uint160 sqrtPriceX96,,,,,,) = IPearlV2Pool(_pair).slot0();
 
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i; i < len; i++) {
             uint256 tokenId = tokenIds[i];
             (uint256 _amount0, uint256 _amount1) = PositionValue.principal(positionManager, tokenId, sqrtPriceX96);
             amount0 += _amount0;

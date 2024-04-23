@@ -31,6 +31,27 @@ interface IPearlV2Factory {
     /// @return The address of the factory owner
     function owner() external view returns (address);
 
+    /// @notice Returns the address of the pool implementation
+    /// @return The address of the pool implementation
+    function poolImplementation() external view returns (address);
+
+    /// @notice Returns the address of the gauge for the pool
+    /// @dev only rebase proxy can skim the surplus rebasing tokens
+    /// to be distributed as the bribe to the voters.
+    /// @return The address of the USTB rebase proxy controller
+    function rebaseProxy() external view returns (address);
+
+    /// @notice Returns the address of the pool manager
+    /// @dev poolManager has rights to create the pool and set the inital
+    /// price of the pool.
+    /// @return The address of the pool manager of the factory.
+    function poolManager() external view returns (address);
+
+    /// @notice Returns the address of the gauge manager
+    /// @dev gaugeManager has rights to set the gauge address in the pool
+    /// @return The address of the gauge manager of the factory.
+    function gaugeManager() external view returns (address);
+
     /// @notice Returns the tick spacing for a given fee amount, if enabled, or 0 if not enabled
     /// @dev A fee amount can never be removed, so this value should be hard coded or cached in the calling context
     /// @param fee The enabled fee, denominated in hundredths of a bip. Returns 0 in case of unenabled fee
@@ -78,13 +99,6 @@ interface IPearlV2Factory {
         view
         returns (address factory, address token0, address token1, uint24 fee, int24 tickSpacing);
 
-    /// @notice Sets the initial price for the pool
-    /// @dev Called by the pool manager to set the initial price of the pool.
-    /// Price is represented as a sqrt(amountToken1/amountToken0) Q64.96 value
-    /// @param pool address of the pool
-    /// @param sqrtPriceX96 the initial sqrt price of the pool as a Q64.96
-    function initializePoolPrice(address pool, uint160 sqrtPriceX96) external;
-
     /// @notice Sets the gauge address for the pool
     /// @dev Called by the pool manager or gauge manager to
     /// set gauge address for the pool
@@ -96,9 +110,25 @@ interface IPearlV2Factory {
     /// @param _rebaseProxy address of the ustb rebase controller
     function setRebaseProxy(address _rebaseProxy) external;
 
-    function allPairsLength() external view returns (uint256);
+    /// @notice set gauge manager address
+    /// @param _manager address of the gauge manager
+    function setGaugeManager(address _manager) external;
+
+    /// @notice Sets the initial price for the pool
+    /// @dev Called by the pool manager to set the initial price of the pool.
+    /// Price is represented as a sqrt(amountToken1/amountToken0) Q64.96 value
+    /// @param pool address of the pool
+    /// @param sqrtPriceX96 the initial sqrt price of the pool as a Q64.96
+    function initializePoolPrice(address pool, uint160 sqrtPriceX96) external;
+
+    /// @notice Get the total number of the pools
+    /// @return size total number of the generated pools
+    function allPairsLength() external view returns (uint256 size);
+
+    /// @notice Get the pool address at the specified index
+    /// @param index array index
+    /// @return pair address of the pool at the specified index
+    function allPairs(uint256 index) external view returns (address pair);
 
     function isPair(address pool) external view returns (bool);
-
-    function allPairs(uint256 index) external view returns (address);
 }

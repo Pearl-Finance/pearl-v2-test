@@ -33,6 +33,8 @@ interface IPearlV2Pool {
             bool unlocked
         );
 
+    function factory() external returns (address);
+
     /// @notice Returns the information about a position by the position's key
     /// @param key The position's key is a hash of a preimage composed by the owner, tickLower and tickUpper
     /// @return _liquidity The amount of liquidity in the position,
@@ -50,11 +52,11 @@ interface IPearlV2Pool {
             uint128 tokensOwed0,
             uint128 tokensOwed1
         );
-
     /// @notice Adds liquidity for the given recipient/tickLower/tickUpper position
     /// @dev The caller of this method receives a callback in the form of IUniswapV3MintCallback#uniswapV3MintCallback
     /// in which they must pay any token0 or token1 owed for the liquidity. The amount of token0/token1 due depends
     /// on tickLower, tickUpper, the amount of liquidity, and the current price.
+    /// @param sender The address of the sender transferring tokens for liquidity.
     /// @param recipient The address for which the liquidity will be created
     /// @param tickLower The lower tick of the position in which to add liquidity
     /// @param tickUpper The upper tick of the position in which to add liquidity
@@ -62,9 +64,15 @@ interface IPearlV2Pool {
     /// @param data Any data that should be passed through to the callback
     /// @return amount0 The amount of token0 that was paid to mint the given amount of liquidity. Matches the value in the callback
     /// @return amount1 The amount of token1 that was paid to mint the given amount of liquidity. Matches the value in the callback
-    function mint(address recipient, int24 tickLower, int24 tickUpper, uint128 amount, bytes calldata data)
-        external
-        returns (uint256 amount0, uint256 amount1);
+    /// @return actualLiquidity The actual amount of minted liquidity
+    function mint(
+        address sender,
+        address recipient,
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 amount,
+        bytes calldata data
+    ) external returns (uint256 amount0, uint256 amount1, uint128 actualLiquidity);
 
     /// @notice Collects tokens owed to a position
     /// @dev Does not recompute fees earned, which must be done either via mint or burn of any amount of liquidity.
@@ -109,6 +117,26 @@ interface IPearlV2Pool {
     /// @return amount0 The delta of the balance of token0 of the pool, exact when negative, minimum when positive
     /// @return amount1 The delta of the balance of token1 of the pool, exact when negative, minimum when positive
     function swap(
+        address recipient,
+        bool zeroForOne,
+        int256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
+        bytes calldata data
+    ) external returns (int256 amount0, int256 amount1);
+
+    /// @notice Swap token0 for token1, or token1 for token0 (tokens that have fee on transfer or rounding rebase tokens)
+    /// @dev The caller of this method receives a callback in the form of IUniswapV3SwapCallback#uniswapV3SwapCallback
+    /// @param sender The address to sender the input of the swap
+    /// @param recipient The address to receive the output of the swap
+    /// @param zeroForOne The direction of the swap, true for token0 to token1, false for token1 to token0
+    /// @param amountSpecified The amount of the swap, which implicitly configures the swap as exact input (positive), or exact output (negative)
+    /// @param sqrtPriceLimitX96 The Q64.96 sqrt price limit. If zero for one, the price cannot be less than this
+    /// value after the swap. If one for zero, the price cannot be greater than this value after the swap
+    /// @param data Any data to be passed through to the callback
+    /// @return amount0 The delta of the balance of token0 of the pool, exact when negative, minimum when positive
+    /// @return amount1 The delta of the balance of token1 of the pool, exact when negative, minimum when positive
+    function swapFeeOnTransfer(
+        address sender,
         address recipient,
         bool zeroForOne,
         int256 amountSpecified,

@@ -2,6 +2,13 @@
 pragma solidity ^0.8.0;
 
 interface ILiquidBoxManager {
+    struct BoxParams {
+        uint8 version;
+        bool twapOverride; // force twap check
+        uint32 twapInterval; // custom global twap
+        uint256 priceThreshold; // price threshold
+    }
+
     /**
      * @notice set pool factory contract address
      * @param factory Address of pearlV3 pool factory
@@ -31,6 +38,7 @@ interface ILiquidBoxManager {
      */
     function deposit(address box, uint256 deposit0, uint256 deposit1, uint256 amount0Min, uint256 amount1Min)
         external
+        payable
         returns (uint256 shares);
 
     /**
@@ -94,13 +102,13 @@ interface ILiquidBoxManager {
      * @notice Claims collected management fees and transfers them to the specified address.
      * @dev This function can only be called by the owner of the contract.
      * @param box The address to which the fee will be collected.
-     * @param to The address to which the collected fees will be transferred.
      * @return collectedfees0 The amount of collected fees denominated in token0.
      * @return collectedfees1 The amount of collected fees denominated in token1.
+     * @return collectedFeesOnEmission The amount of collected fees on reward emission from gauge.
      */
-    function claimManagementFees(address box, address to)
+    function claimManagementFees(address box)
         external
-        returns (uint256 collectedfees0, uint256 collectedfees1);
+        returns (uint256 collectedfees0, uint256 collectedfees1, uint256 collectedFeesOnEmission);
 
     /**
      * @notice Calculates the amounts of token0, token1 and lqiuidity using
@@ -160,4 +168,29 @@ interface ILiquidBoxManager {
      * @dev This function is view-only and does not modify the state of the contract.
      */
     function balanceOf(address box, address to) external view returns (uint256 amount);
+
+    /**
+     * @notice Returns the management fees for a specific Trident ALM box.
+     * @param box Address of the Trident ALM box.
+     * @return claimable0 The amount of claimable fees denominated in token0.
+     * @return claimable1 The amount of claimable fees denominated in token1.
+     * @return emission The amount of fees on reward emission from the gauge.
+     */
+    function getManagementFees(address box)
+        external
+        view
+        returns (uint256 claimable0, uint256 claimable1, uint256 emission);
+
+    /**
+     * @notice Calculates the amounts for a given box tick range using the input amounts
+     * @param box The address of the liquid box
+     * @param deposit0 The input amount of token0
+     * @param deposit1 The input amount of token1
+     * @return required0 The amount of token0 for the current tick range
+     * @return required1 The amount of token1 for the current tick range
+     */
+    function getRequiredAmountsForInput(address box, uint256 deposit0, uint256 deposit1)
+        external
+        view
+        returns (uint256 required0, uint256 required1);
 }

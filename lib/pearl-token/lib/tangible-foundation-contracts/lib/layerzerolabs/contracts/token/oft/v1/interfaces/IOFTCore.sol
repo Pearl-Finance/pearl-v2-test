@@ -2,7 +2,7 @@
 
 pragma solidity >=0.5.0;
 
-import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import "../../../../../../../../../../openzeppelin-08/contracts/utils/introspection/IERC165.sol";
 
 /**
  * @dev Interface of the IOFT core standard
@@ -16,7 +16,13 @@ interface IOFTCore is IERC165 {
      * _useZro - indicates to use zro to pay L0 fees
      * _adapterParam - flexible bytes array to indicate messaging adapter services in L0
      */
-    function estimateSendFee(uint16 _dstChainId, bytes calldata _toAddress, uint _amount, bool _useZro, bytes calldata _adapterParams) external view returns (uint nativeFee, uint zroFee);
+    function estimateSendFee(
+        uint16 _dstChainId,
+        bytes calldata _toAddress,
+        uint _amount,
+        bool _useZro,
+        bytes calldata _adapterParams
+    ) external view returns (uint nativeFee, uint zroFee);
 
     /**
      * @dev send `_amount` amount of token to (`_dstChainId`, `_toAddress`) from `_from`
@@ -28,7 +34,15 @@ interface IOFTCore is IERC165 {
      * `_zroPaymentAddress` set to address(0x0) if not paying in ZRO (LayerZero Token)
      * `_adapterParams` is a flexible bytes array to indicate messaging adapter services
      */
-    function sendFrom(address _from, uint16 _dstChainId, bytes calldata _toAddress, uint _amount, address payable _refundAddress, address _zroPaymentAddress, bytes calldata _adapterParams) external payable;
+    function sendFrom(
+        address _from,
+        uint16 _dstChainId,
+        bytes calldata _toAddress,
+        uint _amount,
+        address payable _refundAddress,
+        address _zroPaymentAddress,
+        bytes calldata _adapterParams
+    ) external payable;
 
     /**
      * @dev returns the circulating amount of tokens on current chain

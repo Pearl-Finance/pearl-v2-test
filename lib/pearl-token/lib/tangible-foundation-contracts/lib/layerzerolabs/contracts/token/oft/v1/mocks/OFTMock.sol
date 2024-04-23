@@ -9,7 +9,7 @@ contract OFTMock is OFT {
     constructor(address _layerZeroEndpoint) OFT("MockOFT", "OFT", _layerZeroEndpoint) {}
 
     // @dev WARNING public mint function, do not use this in production
-    function mintTokens(address _to, uint256 _amount) external {
+    function mint(address _to, uint256 _amount) external {
         _mint(_to, _amount);
     }
 }
