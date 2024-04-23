@@ -93,7 +93,7 @@ contract Imports is Test, Bytes {
     address[] gauges;
     address[] public pools;
 
-    address pool;
+    IPearlV2Pool pool;
     address router;
 
     uint256 public mainChainId;
@@ -237,6 +237,132 @@ contract Imports is Test, Bytes {
 
         pearlV2Factory.grantRole(keccak256("GAUGE_MANAGER"), address(voterL1));
     }
+
+    // function l2SetUp() public {
+    //     vm.chainId(42161);
+
+    //     lzEndPointMockL2 = new LZEndpointMock(lzPoolChainId);
+    //     otherOFT = new OFTMockToken(address(lzEndPointMockL2));
+
+    //     address[] memory addr = new address[](1);
+    //     addr[0] = address(otherOFT);
+
+    //     gaugeV2L2 = new GaugeV2();
+    //     liquidBoxL2 = new LiquidBox();
+    //     gaugeV2ALML2 = new GaugeV2ALM();
+
+    //     liquidBoxFactoryL2 = new LiquidBoxFactory();
+
+    //     bytes memory init =
+    //         abi.encodeCall(LiquidBoxFactory.initialize, (address(this), pearlFactory, address(liquidBoxL2)));
+
+    //     ERC1967Proxy liquidBoxFactoryProxy = new ERC1967Proxy(address(liquidBoxFactoryL2), init);
+    //     liquidBoxFactoryL2 = LiquidBoxFactory(address(liquidBoxFactoryProxy));
+
+    //     liquidBoxManagerL2 = new LiquidBoxManager();
+    //     init = abi.encodeCall(
+    //         LiquidBoxManager.initialize, (address(this), address(liquidBoxFactoryL2), address(6), address(6))
+    //     );
+
+    //     ERC1967Proxy liquidBoxManagerProxy = new ERC1967Proxy(address(liquidBoxManagerL2), init);
+    //     liquidBoxManagerL2 = LiquidBoxManager(address(liquidBoxManagerProxy));
+
+    //     gaugeV2FactoryL2 = new GaugeV2Factory(mainChainId);
+
+    //     init = abi.encodeCall(
+    //         GaugeV2Factory.initialize,
+    //         (
+    //             address(this),
+    //             address(gaugeV2L2),
+    //             address(gaugeV2ALML2),
+    //             address(manager),
+    //             address(liquidBoxManagerL2),
+    //             address(voterL2)
+    //         )
+    //     );
+
+    //     ERC1967Proxy gaugeV2FactoryL2Proxy = new ERC1967Proxy(address(gaugeV2FactoryL2), init);
+
+    //     gaugeV2FactoryL2 = GaugeV2Factory(address(gaugeV2FactoryL2Proxy));
+
+    //     address voterProxyAddressL2 = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 3);
+
+    //     bribeFactoryL2 = new BribeFactory(mainChainId);
+
+    //     init = abi.encodeCall(BribeFactory.initialize, (address(this), address(bribe), voterProxyAddressL2, ustb, addr));
+    //     ERC1967Proxy bribeFactoryL2Proxy = new ERC1967Proxy(address(bribeFactoryL2), init);
+
+    //     bribeFactoryL2 = BribeFactory(address(bribeFactoryL2Proxy));
+    //     voterL2 = new Voter(mainChainId, address(lzEndPointMockL2));
+
+    //     init = abi.encodeCall(
+    //         Voter.initialize,
+    //         (
+    //             address(this),
+    //             address(this),
+    //             address(0),
+    //             address(otherOFT),
+    //             pearlFactory,
+    //             address(gaugeV2FactoryL2),
+    //             address(bribeFactoryL2),
+    //             ustb,
+    //             lzMainChainId,
+    //             lzPoolChainId
+    //         )
+    //     );
+
+    //     ERC1967Proxy voterL2Proxy = new ERC1967Proxy(address(voterL2), init);
+    //     voterL2 = Voter(address(voterL2Proxy));
+
+    //     // vm.startPrank(0x95e3664633A8650CaCD2c80A0F04fb56F65DF300);
+    //     // IPearlV2Factory(pearlFactory).setGaugeManager(address(voterL2));
+    //     // vm.stopPrank();
+
+    //     // lzEndPointMockL1.setDestLzEndpoint(
+    //     //     address(voterL2),
+    //     //     address(lzEndPointMockL2)
+    //     // );
+    //     // lzEndPointMockL2.setDestLzEndpoint(
+    //     //     address(voterL1),
+    //     //     address(lzEndPointMockL1)
+    //     // );
+
+    //     // lzEndPointMockL1.setDestLzEndpoint(
+    //     //     address(otherOFT),
+    //     //     address(lzEndPointMockL2)
+    //     // );
+    //     // lzEndPointMockL2.setDestLzEndpoint(
+    //     //     address(nativeOFT),
+    //     //     address(lzEndPointMockL1)
+    //     // );
+
+    //     // nativeOFT.setTrustedRemoteAddress(
+    //     //     lzPoolChainId,
+    //     //     abi.encodePacked(address(otherOFT))
+    //     // );
+    //     // otherOFT.setTrustedRemoteAddress(
+    //     //     lzMainChainId,
+    //     //     abi.encodePacked(address(nativeOFT))
+    //     // );
+
+    //     // voterL1.setTrustedRemote(
+    //     //     lzPoolChainId,
+    //     //     abi.encodePacked(address(voterL2), address(voterL1))
+    //     // );
+    //     // voterL2.setTrustedRemote(
+    //     //     lzMainChainId,
+    //     //     abi.encodePacked(address(voterL1), address(voterL2))
+    //     // );
+
+    //     // poolL2 = 0x3dDc6EbfB3BB43aDAED7Ef1Aaae75fAD8caa3419;
+
+    //     // assertEq(voterL1.getLzPoolsLength(), 0);
+    //     // gaugeV2L2 = GaugeV2(
+    //     //     payable(voterL2.createGauge{value: 10 ether}(poolL2, ""))
+    //     // );
+
+    //     // assertEq(voterL1.getLzPoolsLength(), 1);
+    // }
 
     function testExcluded() public {}
 }
